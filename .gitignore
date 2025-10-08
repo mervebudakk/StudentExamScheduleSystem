@@ -1,0 +1,19 @@
+# Python'un oluşturduğu geçici dosyaları yok say
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Sanal Ortam (Virtual Environment) klasörlerini yok say
+venv/
+.venv/
+
+# IDE ve editör ayar klasörlerini yok say
+.idea/
+.vscode/
+
+# Hassas bilgileri içeren ortam değişkeni dosyasını yok say
+.env
+
+# Diğerleri
+*.sqlite3
