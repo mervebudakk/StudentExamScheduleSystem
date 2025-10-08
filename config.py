@@ -1,16 +1,25 @@
+# student_system/core/config.py
+from dataclasses import dataclass
+from dotenv import load_dotenv, find_dotenv
 import os
-from dotenv import load_dotenv
 
-# .env dosyasının tam yolunu bul
-# Bu, script'i projenin neresinden çalıştırırsanız çalıştırın .env dosyasını doğru bulmasını sağlar.
-dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+# .env'i proje kökünde otomatik bul (nereden çalıştırırsan çalıştır)
+load_dotenv(find_dotenv(), override=False)
 
-# .env dosyasını yükleyerek içindeki değişkenleri ortam değişkeni olarak ayarla
-load_dotenv(dotenv_path=dotenv_path)
+@dataclass(frozen=True)
+class Settings:
+    host: str
+    port: int
+    name: str
+    user: str
+    password: str
 
-# Ortam değişkenlerinden veritabanı bilgilerini oku ve Python değişkenlerine ata
-DB_HOST = os.getenv('DB_HOST')
-DB_PORT = os.getenv('DB_PORT')
-DB_NAME = os.getenv('DB_NAME')
-DB_USER = os.getenv('DB_USER')
-DB_PASS = os.getenv('DB_PASS') # .env dosyasındaki anahtarın DB_PASS olduğundan emin olun
+def get_settings() -> Settings:
+    return Settings(
+        host=os.getenv("DB_HOST", "localhost"),
+        port=int(os.getenv("DB_PORT", "5432")),
+        name=os.getenv("DB_NAME", ""),
+        user=os.getenv("DB_USER", ""),
+        # DB_PASS ya da DB_PASSWORD ikisini de destekleyelim
+        password=(os.getenv("DB_PASS") or os.getenv("DB_PASSWORD") or "")
+    )
