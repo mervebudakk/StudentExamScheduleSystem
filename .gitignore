@@ -1,19 +1,30 @@
-# Python'un oluşturduğu geçici dosyaları yok say
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Sanal Ortam (Virtual Environment) klasörlerini yok say
+*.py[cod]
+*$py.class
+*.so
+.Python
 venv/
-.venv/
+env/
+ENV/
 
-# IDE ve editör ayar klasörlerini yok say
-.idea/
+# IDE
 .vscode/
+.idea/
+*.swp
+*.swo
 
-# Hassas bilgileri içeren ortam değişkeni dosyasını yok say
+# Environment
 .env
+.env.local
 
-# Diğerleri
+# Database
+*.db
 *.sqlite3
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,20 @@
+# Veritabanı
+psycopg2-binary==2.9.9
+
+# Güvenlik
+bcrypt==4.1.2
+
+# Environment
+python-dotenv==1.0.0
+
+# Excel işlemleri
+openpyxl==3.1.2
+pandas==2.2.0
+
+# PDF oluşturma
+reportlab==4.0.9
+
+# GUI (PyQt5 veya Tkinter - birini seçin)
+PyQt5==5.15.10
+# veya
+# tkinter (Python ile birlikte gelir)

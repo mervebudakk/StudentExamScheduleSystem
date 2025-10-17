@@ -1,42 +1,71 @@
-import sys
-from loguru import logger
-
-# Proje ana dizinini Python path'ine ekliyoruz.
-# Bu sayede "student_system" modülünü bulabiliyor.
-sys.path.append('.')
-
-from student_system.core.database import init_pool, fetch_one
+"""
+Tailscale üzerinden PostgreSQL bağlantısını test et
+"""
+import psycopg2
+from student_system.core.config import db_settings
 
 
-def main():
-    """
-    Veritabanı bağlantısını test etmek için ana fonksiyon.
-    """
-    logger.info("Veritabanı bağlantısı test ediliyor...")
+def test_connection():
+    """Veritabanı bağlantısını test et"""
+    print("=" * 60)
+    print("VERİTABANI BAĞLANTI TESTİ")
+    print("=" * 60)
+    print(f"Host: {db_settings.host}")
+    print(f"Port: {db_settings.port}")
+    print(f"Database: {db_settings.name}")
+    print(f"User: {db_settings.user}")
+    print("=" * 60)
 
     try:
-        # 1. Bağlantı havuzunu başlatmayı dene.
-        # Bu fonksiyon, .env dosyasını okuyup bağlantı kurmaya çalışacak.
-        init_pool()
+        # Bağlantı kur
+        print("\n⏳ Bağlanılıyor...")
+        conn = psycopg2.connect(**db_settings.psycopg2_params)
 
-        # 2. Bağlantının çalıştığını doğrulamak için basit bir sorgu gönder.
-        logger.info("PostgreSQL sunucu versiyonu sorgulanıyor...")
-        version_info = fetch_one("SELECT version();")
+        # Test sorgusu
+        cur = conn.cursor()
+        cur.execute("SELECT version();")
+        version = cur.fetchone()
 
-        if version_info:
-            logger.success("Sorgu başarılı! Sunucu versiyonu:")
-            # Gelen sonucun ilk elemanını (versiyon metnini) yazdır.
-            logger.info(version_info[0])
-            print("\n✅ VERİTABANI BAĞLANTISI BAŞARILI! ✅")
+        print("✅ BAĞLANTI BAŞARILI!")
+        print(f"\nPostgreSQL Version:")
+        print(version[0])
+
+        # Mevcut tabloları listele
+        cur.execute("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public'
+            ORDER BY table_name;
+        """)
+
+        tables = cur.fetchall()
+
+        if tables:
+            print(f"\n📊 Mevcut Tablolar ({len(tables)} adet):")
+            for table in tables:
+                print(f"  - {table[0]}")
         else:
-            logger.error("Bağlantı kuruldu ancak sorgu bir sonuç döndürmedi.")
+            print("\n⚠️  Henüz tablo oluşturulmamış.")
+
+        cur.close()
+        conn.close()
+
+        return True
+
+    except psycopg2.OperationalError as e:
+        print("❌ BAĞLANTI HATASI!")
+        print(f"\nHata: {e}")
+        print("\n🔍 Kontrol Edilecekler:")
+        print("  1. Tailscale bağlantınız aktif mi?")
+        print("  2. PostgreSQL servisi çalışıyor mu?")
+        print("  3. .env dosyasındaki bilgiler doğru mu?")
+        print("  4. Firewall PostgreSQL'e izin veriyor mu?")
+        return False
 
     except Exception as e:
-        logger.error("❌ VERİTABANI BAĞLANTISI BAŞARISIZ OLDU! ❌")
-        logger.error(f"Alınan Hata: {e}")
-        print("\nLütfen .env dosyasındaki DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS bilgilerini,")
-        print("Tailscale bağlantınızın aktif olduğunu ve PostgreSQL sunucusunun çalıştığını kontrol edin.")
+        print(f"❌ BEKLENMEYEN HATA: {e}")
+        return False
 
 
 if __name__ == "__main__":
-    main()
+    test_connection()
