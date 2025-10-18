@@ -98,7 +98,6 @@ class MainDashboard(QMainWindow):
             widget = item.widget()
             if widget:
                 widget.setParent(None)
-                widget.deleteLater()
 
     def show_dashboard_content(self):
         """Dashboard varsayılan içeriği yükle"""
@@ -435,11 +434,24 @@ class MainDashboard(QMainWindow):
         """)
         msg.exec_()
 
-
 if __name__ == '__main__':
+    import os
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtWidgets import QApplication, QStyleFactory
+    from PyQt5.QtGui import QFont
+
+    # --- Ekran ve stil sabitleme ---
+    os.environ.setdefault("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
+    os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
+    os.environ.setdefault("QT_SCALE_FACTOR", "1")
+
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+
     app = QApplication(sys.argv)
+    app.setStyle(QStyleFactory.create("Fusion"))  # Fusion teması → daha kararlı
     app.setFont(QFont('Segoe UI', 10))
 
+    # --- Test kullanıcısı ---
     test_user = {
         'id': 1,
         'ad_soyad': 'Sistem Admin',
@@ -448,6 +460,7 @@ if __name__ == '__main__':
         'rol': 'Admin'
     }
 
+    # --- Ana pencereyi başlat ---
     window = MainDashboard(test_user)
     window.show()
     sys.exit(app.exec_())

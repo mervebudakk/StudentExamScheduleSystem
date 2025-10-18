@@ -37,7 +37,7 @@ class ClassroomManagement(QWidget):
 
         # Üst araç çubuğu: arama + filtre + yenile
         toolbar = QHBoxLayout()
-        self.search = QLineEdit(); self.search.setPlaceholderText("Ad/Kod/Bina ara...")
+        self.search = QLineEdit(); self.search.setPlaceholderText("ID/Kod/Ad ara...")
         self.search.textChanged.connect(self._load_table)
 
         self.filter_dept = QComboBox()
@@ -57,10 +57,10 @@ class ClassroomManagement(QWidget):
         toolbar.addWidget(btn_refresh)
         root.addLayout(toolbar)
 
-        # Tablo
-        self.table = QTableWidget(0, 7)
+        # Tablo (şemaya uygun kolonlar)
+        self.table = QTableWidget(0, 9)
         self.table.setHorizontalHeaderLabels(
-            ["ID", "Ad", "Kapasite", "Bina", "Kat", "Bölüm", "Aktif"]
+            ["ID", "Kod", "Ad", "Kapasite", "Enine", "Boyuna", "Yapı", "Bölüm", "Aktif"]
         )
         self.table.setSelectionBehavior(self.table.SelectRows)
         self.table.setEditTriggers(self.table.NoEditTriggers)
@@ -68,26 +68,29 @@ class ClassroomManagement(QWidget):
         self.table.horizontalHeader().setStretchLastSection(True)
         root.addWidget(self.table)
 
-        # Form
+        # Form (şemaya uygun alanlar)
         form_box = QFrame(); fl = QFormLayout(form_box); fl.setLabelAlignment(Qt.AlignRight)
 
+        self.inp_code = QLineEdit()
         self.inp_name = QLineEdit()
-        self.inp_building = QLineEdit()
-        self.inp_floor = QSpinBox(); self.inp_floor.setRange(-5, 50)
-        self.inp_capacity = QSpinBox(); self.inp_capacity.setRange(1, 2000)
+        self.inp_capacity = QSpinBox(); self.inp_capacity.setRange(1, 5000)
+        self.inp_enine = QSpinBox(); self.inp_enine.setRange(1, 200)
+        self.inp_boyuna = QSpinBox(); self.inp_boyuna.setRange(1, 200)
+        self.inp_yapi = QSpinBox(); self.inp_yapi.setRange(2, 4)  # 2/3/4 destekli
         self.inp_active = QCheckBox("Aktif"); self.inp_active.setChecked(True)
 
         self.inp_dept = QComboBox()
         self._fill_dept_combo(self.inp_dept, include_all=False)
-        # Bölüm yetkisi yoksa kilitle ve kendi bölümünü sabitle
         if not self.pm.can_manage_all_departments():
             self._select_dept(self.inp_dept, self.user["bolum_id"])
             self.inp_dept.setDisabled(True)
 
+        fl.addRow("Derslik Kodu:", self.inp_code)
         fl.addRow("Derslik Adı:", self.inp_name)
-        fl.addRow("Bina:", self.inp_building)
-        fl.addRow("Kat:", self.inp_floor)
         fl.addRow("Kapasite:", self.inp_capacity)
+        fl.addRow("Enine Sıra:", self.inp_enine)
+        fl.addRow("Boyuna Sıra:", self.inp_boyuna)
+        fl.addRow("Sıra Yapısı (2/3/4):", self.inp_yapi)
         fl.addRow("Bölüm:", self.inp_dept)
         fl.addRow("", self.inp_active)
         root.addWidget(form_box)
@@ -103,7 +106,7 @@ class ClassroomManagement(QWidget):
     # ---------- Data ----------
     def _fetch_departments(self):
         return Database.execute_query(
-            "SELECT bolum_id AS id, bolum_adi AS ad FROM bolumler WHERE aktif = TRUE ORDER BY bolum_adi"
+            "SELECT bolum_id AS id, bolum_adi AS ad FROM Bolumler WHERE aktif = TRUE ORDER BY bolum_adi"
         ) or []
 
     def _fill_dept_combo(self, combo: QComboBox, include_all=False):
@@ -113,7 +116,6 @@ class ClassroomManagement(QWidget):
         for d in self.departments:
             combo.addItem(d["ad"], d["id"])
         if include_all and not self.pm.can_manage_all_departments():
-            # filtrede sabitle
             self._select_dept(combo, self.user["bolum_id"])
             combo.setDisabled(True)
 
@@ -131,9 +133,9 @@ class ClassroomManagement(QWidget):
 
         if q:
             if q.isdigit():
-                where.append("derslik_id = %s"); params.append(int(q))
+                where.append("(derslik_id = %s OR LOWER(derslik_kodu) LIKE %s)"); params += [int(q), f"%{q}%"]
             else:
-                where.append("(LOWER(derslik_adi) LIKE %s OR LOWER(bina) LIKE %s)")
+                where.append("(LOWER(derslik_kodu) LIKE %s OR LOWER(derslik_adi) LIKE %s)")
                 like = f"%{q}%"; params += [like, like]
 
         if dept_id:
@@ -144,21 +146,28 @@ class ClassroomManagement(QWidget):
         if only_active:
             where.append("aktif = TRUE")
 
-        sql = "SELECT derslik_id, derslik_adi, kapasite, bina, kat, bolum_id, aktif FROM derslikler"
+        sql = """
+            SELECT derslik_id, derslik_kodu, derslik_adi, kapasite,
+                   enine_sira_sayisi, boyuna_sira_sayisi, sira_yapisi,
+                   bolum_id, aktif
+            FROM Derslikler
+        """
         if where: sql += " WHERE " + " AND ".join(where)
-        sql += " ORDER BY bina NULLS LAST, kat NULLS LAST, derslik_adi"
+        sql += " ORDER BY derslik_kodu"
 
         rows = Database.execute_query(sql, tuple(params)) or []
         self.table.setRowCount(0)
         for r in rows:
             i = self.table.rowCount(); self.table.insertRow(i)
             self.table.setItem(i, 0, QTableWidgetItem(str(r["derslik_id"])))
-            self.table.setItem(i, 1, QTableWidgetItem(r["derslik_adi"]))
-            self.table.setItem(i, 2, QTableWidgetItem(str(r["kapasite"])))
-            self.table.setItem(i, 3, QTableWidgetItem(r["bina"] or ""))
-            self.table.setItem(i, 4, QTableWidgetItem("" if r["kat"] is None else str(r["kat"])))
-            self.table.setItem(i, 5, QTableWidgetItem(self._dept_name(r["bolum_id"])))
-            self.table.setItem(i, 6, QTableWidgetItem("Evet" if r["aktif"] else "Hayır"))
+            self.table.setItem(i, 1, QTableWidgetItem(r["derslik_kodu"]))
+            self.table.setItem(i, 2, QTableWidgetItem(r["derslik_adi"] or ""))
+            self.table.setItem(i, 3, QTableWidgetItem(str(r["kapasite"])))
+            self.table.setItem(i, 4, QTableWidgetItem(str(r["enine_sira_sayisi"])))
+            self.table.setItem(i, 5, QTableWidgetItem(str(r["boyuna_sira_sayisi"])))
+            self.table.setItem(i, 6, QTableWidgetItem(str(r["sira_yapisi"])))
+            self.table.setItem(i, 7, QTableWidgetItem(self._dept_name(r["bolum_id"])))
+            self.table.setItem(i, 8, QTableWidgetItem("Evet" if r["aktif"] else "Hayır"))
 
         self.current_id = None
 
@@ -168,36 +177,26 @@ class ClassroomManagement(QWidget):
         return "-"
 
     def _pick_row(self, row, _col):
-        try:
-            id_item = self.table.item(row, 0)
-            if id_item is None:
-                self.current_id = None
-                return
-            self.current_id = int(id_item.text())
-        except Exception:
-            self.current_id = None
-            return
-
-        # Koruyucu erişimler
         def _safe_text(r, c):
             it = self.table.item(r, c)
             return it.text() if it is not None else ""
 
-        self.inp_name.setText(_safe_text(row, 1))
-        cap_txt = _safe_text(row, 2)
-        self.inp_capacity.setValue(int(cap_txt) if cap_txt.isdigit() else 0)
-        self.inp_building.setText(_safe_text(row, 3))
-
-        kat_txt = _safe_text(row, 4)
         try:
-            self.inp_floor.setValue(int(kat_txt) if kat_txt else 0)
+            id_item = self.table.item(row, 0)
+            self.current_id = int(id_item.text()) if id_item and id_item.text().isdigit() else None
         except Exception:
-            self.inp_floor.setValue(0)
+            self.current_id = None
 
-        dept_name = _safe_text(row, 5)
-        self._select_dept(self.inp_dept, self._dept_id_by_name(dept_name))
+        self.inp_code.setText(_safe_text(row, 1))
+        self.inp_name.setText(_safe_text(row, 2))
 
-        self.inp_active.setChecked(_safe_text(row, 6) == "Evet")
+        cap = _safe_text(row, 3); self.inp_capacity.setValue(int(cap) if cap.isdigit() else 1)
+        enine = _safe_text(row, 4); self.inp_enine.setValue(int(enine) if enine.isdigit() else 1)
+        boyuna = _safe_text(row, 5); self.inp_boyuna.setValue(int(boyuna) if boyuna.isdigit() else 1)
+        yapi = _safe_text(row, 6); self.inp_yapi.setValue(int(yapi) if yapi.isdigit() else 2)
+
+        self._select_dept(self.inp_dept, self._dept_id_by_name(_safe_text(row, 7)))
+        self.inp_active.setChecked(_safe_text(row, 8) == "Evet")
 
     def _dept_id_by_name(self, name):
         for d in self.departments:
@@ -206,10 +205,16 @@ class ClassroomManagement(QWidget):
 
     # ---------- Actions ----------
     def _validate(self):
+        if not self.inp_code.text().strip():
+            return False, "Derslik kodu boş olamaz."
         if not self.inp_name.text().strip():
             return False, "Derslik adı boş olamaz."
         if self.inp_capacity.value() <= 0:
             return False, "Kapasite 0'dan büyük olmalı."
+        if self.inp_enine.value() <= 0 or self.inp_boyuna.value() <= 0:
+            return False, "Enine/Boyuna sıra sayısı 0'dan büyük olmalı."
+        if self.inp_yapi.value() not in (2, 3, 4):
+            return False, "Sıra yapısı 2, 3 veya 4 olmalı."
         return True, ""
 
     def _save(self):
@@ -222,29 +227,42 @@ class ClassroomManagement(QWidget):
             dept_id = self.user["bolum_id"]
 
         if self.current_id is None:
-            sql = """INSERT INTO derslikler
-                     (derslik_adi, kapasite, bina, kat, bolum_id, aktif)
-                     VALUES (%s,%s,%s,%s,%s,%s)"""
+            # INSERT şemaya göre
+            sql = """INSERT INTO Derslikler
+                     (bolum_id, derslik_kodu, derslik_adi, kapasite,
+                      enine_sira_sayisi, boyuna_sira_sayisi, sira_yapisi, aktif)
+                     VALUES (%s,%s,%s,%s,%s,%s,%s,%s)"""
             Database.execute_non_query(sql, (
+                dept_id,
+                self.inp_code.text().strip(),
                 self.inp_name.text().strip(),
                 int(self.inp_capacity.value()),
-                self.inp_building.text().strip() or None,
-                int(self.inp_floor.value()),
-                dept_id,
+                int(self.inp_enine.value()),
+                int(self.inp_boyuna.value()),
+                int(self.inp_yapi.value()),
                 self.inp_active.isChecked()
             ))
             QMessageBox.information(self, "Bilgi", "Derslik eklendi.")
         else:
-            sql = """UPDATE derslikler SET
-                        derslik_adi=%s, kapasite=%s, bina=%s, kat=%s,
-                        bolum_id=%s, aktif=%s
+            # UPDATE şemaya göre
+            sql = """UPDATE Derslikler SET
+                        bolum_id=%s,
+                        derslik_kodu=%s,
+                        derslik_adi=%s,
+                        kapasite=%s,
+                        enine_sira_sayisi=%s,
+                        boyuna_sira_sayisi=%s,
+                        sira_yapisi=%s,
+                        aktif=%s
                      WHERE derslik_id=%s"""
             Database.execute_non_query(sql, (
+                dept_id,
+                self.inp_code.text().strip(),
                 self.inp_name.text().strip(),
                 int(self.inp_capacity.value()),
-                self.inp_building.text().strip() or None,
-                int(self.inp_floor.value()),
-                dept_id,
+                int(self.inp_enine.value()),
+                int(self.inp_boyuna.value()),
+                int(self.inp_yapi.value()),
                 self.inp_active.isChecked(),
                 self.current_id
             ))
@@ -258,7 +276,7 @@ class ClassroomManagement(QWidget):
         # Bölüm sahipliği kontrolü
         if not self.pm.can_manage_all_departments():
             owner = Database.execute_query(
-                "SELECT bolum_id FROM derslikler WHERE derslik_id=%s", (self.current_id,)
+                "SELECT bolum_id FROM Derslikler WHERE derslik_id=%s", (self.current_id,)
             )
             if owner and owner[0]["bolum_id"] != self.user["bolum_id"]:
                 QMessageBox.warning(self, "Yetki", "Bu dersliği silme yetkiniz yok."); return
@@ -267,14 +285,17 @@ class ClassroomManagement(QWidget):
                                 QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
             return
 
-        Database.execute_non_query("DELETE FROM derslikler WHERE derslik_id=%s", (self.current_id,))
+        Database.execute_non_query("DELETE FROM Derslikler WHERE derslik_id=%s", (self.current_id,))
         QMessageBox.information(self, "Bilgi", "Derslik silindi.")
         self._clear(); self._load_table()
 
     def _clear(self):
         self.current_id = None
-        self.inp_name.clear(); self.inp_building.clear()
-        self.inp_floor.setValue(0); self.inp_capacity.setValue(30)
+        self.inp_code.clear(); self.inp_name.clear()
+        self.inp_capacity.setValue(30)
+        self.inp_enine.setValue(7)
+        self.inp_boyuna.setValue(9)
+        self.inp_yapi.setValue(3)
         self.inp_active.setChecked(True)
         if self.pm.can_manage_all_departments():
             if self.inp_dept.count() > 0: self.inp_dept.setCurrentIndex(0)
