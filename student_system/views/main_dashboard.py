@@ -93,10 +93,12 @@ class MainDashboard(QMainWindow):
     def clear_content_area(self):
         if not self.content_layout:
             return
-        for i in reversed(range(self.content_layout.count())):
-            widget = self.content_layout.itemAt(i).widget()
+        while self.content_layout.count():
+            item = self.content_layout.takeAt(0)
+            widget = item.widget()
             if widget:
                 widget.setParent(None)
+                widget.deleteLater()
 
     def show_dashboard_content(self):
         """Dashboard varsayılan içeriği yükle"""
@@ -377,13 +379,12 @@ class MainDashboard(QMainWindow):
 
     def open_classroom_management(self):
         if not self.permission_manager.has_permission('DERSLIK_YONET'):
-            self.show_permission_error(); return
+            self.show_permission_error()
+            return
 
         from student_system.views.classroom_management import ClassroomManagement
-        self.classroom_win = ClassroomManagement(self.user, self.permission_manager, self)
+        self.classroom_win = ClassroomManagement(self.user, self.permission_manager)  # parent=None
         self.classroom_win.show()
-        self.classroom_win.raise_()
-        self.classroom_win.activateWindow()
 
     def open_course_upload(self):
         if not self.permission_manager.has_permission('DERS_YUKLE'):

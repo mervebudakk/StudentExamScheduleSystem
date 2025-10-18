@@ -168,13 +168,36 @@ class ClassroomManagement(QWidget):
         return "-"
 
     def _pick_row(self, row, _col):
-        self.current_id = int(self.table.item(row, 0).text())
-        self.inp_name.setText(self.table.item(row, 1).text())
-        self.inp_capacity.setValue(int(self.table.item(row, 2).text()))
-        self.inp_building.setText(self.table.item(row, 3).text())
-        self.inp_floor.setValue(int(self.table.item(row, 4).text() or 0))
-        self._select_dept(self.inp_dept, self._dept_id_by_name(self.table.item(row, 5).text()))
-        self.inp_active.setChecked(self.table.item(row, 6).text() == "Evet")
+        try:
+            id_item = self.table.item(row, 0)
+            if id_item is None:
+                self.current_id = None
+                return
+            self.current_id = int(id_item.text())
+        except Exception:
+            self.current_id = None
+            return
+
+        # Koruyucu erişimler
+        def _safe_text(r, c):
+            it = self.table.item(r, c)
+            return it.text() if it is not None else ""
+
+        self.inp_name.setText(_safe_text(row, 1))
+        cap_txt = _safe_text(row, 2)
+        self.inp_capacity.setValue(int(cap_txt) if cap_txt.isdigit() else 0)
+        self.inp_building.setText(_safe_text(row, 3))
+
+        kat_txt = _safe_text(row, 4)
+        try:
+            self.inp_floor.setValue(int(kat_txt) if kat_txt else 0)
+        except Exception:
+            self.inp_floor.setValue(0)
+
+        dept_name = _safe_text(row, 5)
+        self._select_dept(self.inp_dept, self._dept_id_by_name(dept_name))
+
+        self.inp_active.setChecked(_safe_text(row, 6) == "Evet")
 
     def _dept_id_by_name(self, name):
         for d in self.departments:
