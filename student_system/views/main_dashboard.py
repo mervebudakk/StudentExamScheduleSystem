@@ -42,7 +42,39 @@ class PermissionManager:
 
 
 class MainDashboard(QMainWindow):
-    """Ana yönetim ekranı - Login ile uyumlu tema"""
+
+    def create_content_area(self):
+        """İçerik alanı"""
+        self.content_frame = QFrame()
+        self.content_frame.setStyleSheet("background-color: #f8f9fa;")
+
+        self.content_layout = QVBoxLayout()
+        self.content_layout.setContentsMargins(0, 0, 0, 0)
+        self.content_layout.setSpacing(0)
+
+        # Varsayılan olarak dashboard içeriğini göster
+        self.show_dashboard_content()
+
+        self.content_frame.setLayout(self.content_layout)
+        return self.content_frame
+
+    def show_dashboard_content(self):
+        """Dashboard varsayılan içeriği yükle"""
+        self.clear_content_area()
+
+        top_bar = self.create_top_bar()
+        stats = self.create_statistics_section()
+
+        self.content_layout.addWidget(top_bar)
+        self.content_layout.addWidget(stats)
+        self.content_layout.addStretch()
+
+    def clear_content_area(self):
+        """İçerik alanını temizle"""
+        for i in reversed(range(self.content_layout.count())):
+            widget = self.content_layout.itemAt(i).widget()
+            if widget:
+                widget.setParent(None)
 
     def __init__(self, user):
         super().__init__()
@@ -460,7 +492,12 @@ class MainDashboard(QMainWindow):
         if not self.permission_manager.has_permission('DERS_YUKLE'):
             self.show_permission_error()
             return
-        QMessageBox.information(self, 'Ders Yükleme', 'Excel yükleme ekranı hazırlanıyor...')
+
+        from student_system.views.excel_uploader import ExcelUploader
+
+        self.clear_content_area()
+        uploader = ExcelUploader(self)
+        self.content_layout.addWidget(uploader)
 
     def open_student_upload(self):
         if not self.permission_manager.has_permission('OGRENCI_YUKLE'):
