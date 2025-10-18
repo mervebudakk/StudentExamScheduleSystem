@@ -47,6 +47,7 @@ class MainDashboard(QMainWindow):
         super().__init__()
         self.user = user
         self.permission_manager = PermissionManager(user['id'])
+        self.content_layout = None
         self.init_ui()
 
     def init_ui(self):
@@ -90,7 +91,8 @@ class MainDashboard(QMainWindow):
         return self.content_frame
 
     def clear_content_area(self):
-        """İçerik alanını temizle"""
+        if not self.content_layout:
+            return
         for i in reversed(range(self.content_layout.count())):
             widget = self.content_layout.itemAt(i).widget()
             if widget:
