@@ -1,15 +1,14 @@
 """
 Dinamik Sınav Takvimi Sistemi - Ana Dashboard
-RBAC (Role-Based Access Control) ile yetki yönetimi
-Tek dashboard, dinamik menü ve yetki kontrolleri
+Login window ile uyumlu yeşil tema
 """
 import sys
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QMessageBox, QFrame, QScrollArea, QGridLayout
+    QLabel, QPushButton, QMessageBox, QFrame, QGridLayout
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QIcon
+from PyQt5.QtGui import QFont
 from student_system.core.database import Database
 
 
@@ -43,7 +42,7 @@ class PermissionManager:
 
 
 class MainDashboard(QMainWindow):
-    """Ana yönetim ekranı - RBAC ile"""
+    """Ana yönetim ekranı - Login ile uyumlu tema"""
 
     def __init__(self, user):
         super().__init__()
@@ -54,7 +53,7 @@ class MainDashboard(QMainWindow):
     def init_ui(self):
         """Arayüzü oluştur"""
         self.setWindowTitle(f"Sınav Takvimi Sistemi - {self.user['ad_soyad']}")
-        self.setMinimumSize(1200, 800)
+        self.setMinimumSize(1300, 850)
 
         # Ana widget
         central_widget = QWidget()
@@ -65,10 +64,10 @@ class MainDashboard(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Sol panel (Menü)
+        # Sol panel (Yeşil sidebar - Login ile aynı yeşil)
         sidebar = self.create_sidebar()
 
-        # Sağ panel (İçerik)
+        # Sağ panel (İçerik - Açık gri)
         content_area = self.create_content_area()
 
         main_layout.addWidget(sidebar)
@@ -77,13 +76,13 @@ class MainDashboard(QMainWindow):
         central_widget.setLayout(main_layout)
 
     def create_sidebar(self):
-        """Sol menü paneli - Yetkiye göre dinamik"""
+        """Sol menü - Login ile aynı yeşil (#27ae60)"""
         sidebar = QFrame()
-        sidebar.setFixedWidth(280)
+        sidebar.setFixedWidth(300)
         sidebar.setStyleSheet("""
             QFrame {
-                background-color: #2c3e50;
-                border-right: 1px solid #34495e;
+                background-color: rgba(39, 174, 96, 0.95);
+                border-right: none;
             }
         """)
 
@@ -91,7 +90,7 @@ class MainDashboard(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Kullanıcı bilgisi
+        # Kullanıcı bilgisi (Login form kartı gibi beyaz)
         user_info = self.create_user_info_section()
         layout.addWidget(user_info)
 
@@ -99,16 +98,15 @@ class MainDashboard(QMainWindow):
         menu_title = QLabel('MENÜ')
         menu_title.setStyleSheet("""
             QLabel {
-                color: #95a5a6;
-                padding: 20px 20px 10px 20px;
-                font-size: 12px;
+                color: white;
+                padding: 25px 20px 15px 20px;
+                font-size: 13px;
                 font-weight: bold;
-                letter-spacing: 1px;
             }
         """)
         layout.addWidget(menu_title)
 
-        # Menü öğeleri (Yetki bazlı)
+        # Menü öğeleri
         menu_items = self.get_menu_items()
 
         for item in menu_items:
@@ -125,7 +123,7 @@ class MainDashboard(QMainWindow):
         logout_btn = self.create_menu_button('Çıkış', '🚪', self.logout)
         logout_btn.setStyleSheet(logout_btn.styleSheet() + """
             QPushButton:hover {
-                background-color: #c0392b;
+                background-color: rgba(231, 76, 60, 0.8) !important;
             }
         """)
         layout.addWidget(logout_btn)
@@ -134,155 +132,116 @@ class MainDashboard(QMainWindow):
         return sidebar
 
     def get_menu_items(self):
-        """Kullanıcının yetkilerine göre menü öğelerini oluştur"""
+        """Yetkilere göre menü"""
         pm = self.permission_manager
         items = []
 
-        # Ana Sayfa (herkes görebilir)
-        items.append({
-            'text': 'Ana Sayfa',
-            'icon': '🏠',
-            'callback': self.show_dashboard
-        })
+        items.append({'text': 'Ana Sayfa', 'icon': '🏠', 'callback': self.show_dashboard})
 
-        # Kullanıcı Yönetimi (Sadece admin)
         if pm.has_permission('KULLANICI_EKLE'):
-            items.append({
-                'text': 'Kullanıcı Yönetimi',
-                'icon': '👥',
-                'callback': self.open_user_management
-            })
+            items.append({'text': 'Kullanıcı Yönetimi', 'icon': '👥', 'callback': self.open_user_management})
 
-        # Derslik Yönetimi
         if pm.has_permission('DERSLIK_YONET'):
-            items.append({
-                'text': 'Derslik Yönetimi',
-                'icon': '🏫',
-                'callback': self.open_classroom_management
-            })
+            items.append({'text': 'Derslik Yönetimi', 'icon': '🏫', 'callback': self.open_classroom_management})
 
-        # Ders Yükleme
         if pm.has_permission('DERS_YUKLE'):
-            items.append({
-                'text': 'Ders Listesi Yükle',
-                'icon': '📚',
-                'callback': self.open_course_upload
-            })
+            items.append({'text': 'Ders Listesi Yükle', 'icon': '📚', 'callback': self.open_course_upload})
 
-        # Öğrenci Yükleme
         if pm.has_permission('OGRENCI_YUKLE'):
-            items.append({
-                'text': 'Öğrenci Listesi Yükle',
-                'icon': '👨‍🎓',
-                'callback': self.open_student_upload
-            })
+            items.append({'text': 'Öğrenci Listesi Yükle', 'icon': '👨‍🎓', 'callback': self.open_student_upload})
 
-        # Sınav Programı
         if pm.has_permission('SINAV_OLUSTUR'):
-            items.append({
-                'text': 'Sınav Programı',
-                'icon': '📅',
-                'callback': self.open_exam_scheduler
-            })
+            items.append({'text': 'Sınav Programı', 'icon': '📅', 'callback': self.open_exam_scheduler})
 
-        # Oturma Planı
         if pm.has_permission('OTURMA_PLAN'):
-            items.append({
-                'text': 'Oturma Planı',
-                'icon': '💺',
-                'callback': self.open_seating_plan
-            })
+            items.append({'text': 'Oturma Planı', 'icon': '💺', 'callback': self.open_seating_plan})
 
-        # Raporlar (herkes görebilir)
-        items.append({
-            'text': 'Raporlar',
-            'icon': '📊',
-            'callback': self.open_reports
-        })
+        items.append({'text': 'Raporlar', 'icon': '📊', 'callback': self.open_reports})
 
         return items
 
     def create_user_info_section(self):
-        """Kullanıcı bilgi bölümü"""
+        """Kullanıcı bilgi kartı - Login form kartı gibi beyaz"""
         frame = QFrame()
         frame.setStyleSheet("""
             QFrame {
-                background-color: #34495e;
-                padding: 20px;
-                border-bottom: 1px solid #2c3e50;
+                background-color: rgba(255, 255, 255, 0.98);
+                padding: 30px 20px;
+                margin: 20px;
+                border-radius: 20px;
             }
         """)
 
         layout = QVBoxLayout()
+        layout.setSpacing(10)
 
-        # Avatar (emoji)
+        # Avatar - Login ile aynı boyut
         avatar = QLabel('👤')
         avatar.setAlignment(Qt.AlignCenter)
-        avatar.setStyleSheet("font-size: 48px;")
+        avatar.setStyleSheet("font-size: 64px; background-color: transparent;")
 
-        # İsim
+        # İsim - Login başlık rengi (#27ae60)
         name = QLabel(self.user['ad_soyad'])
         name.setAlignment(Qt.AlignCenter)
+        name.setWordWrap(True)
         name.setStyleSheet("""
-            QLabel {
-                color: white;
-                font-size: 16px;
-                font-weight: bold;
-                margin-top: 10px;
-            }
+            color: #27ae60;
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 10px;
+            background-color: transparent;
         """)
 
         # Rol
         role = QLabel(self.user['rol'])
         role.setAlignment(Qt.AlignCenter)
         role.setStyleSheet("""
-            QLabel {
-                color: #95a5a6;
-                font-size: 12px;
-                margin-top: 5px;
-            }
+            color: #2c3e50;
+            font-size: 14px;
+            margin-top: 5px;
+            background-color: transparent;
         """)
-
-        # Bölüm (varsa)
-        if self.user['bolum_adi']:
-            dept = QLabel(self.user['bolum_adi'])
-            dept.setAlignment(Qt.AlignCenter)
-            dept.setStyleSheet("""
-                QLabel {
-                    color: #3498db;
-                    font-size: 11px;
-                    margin-top: 3px;
-                }
-            """)
-            layout.addWidget(dept)
 
         layout.addWidget(avatar)
         layout.addWidget(name)
         layout.addWidget(role)
 
+        # Bölüm (varsa)
+        if self.user['bolum_adi']:
+            dept = QLabel(self.user['bolum_adi'])
+            dept.setAlignment(Qt.AlignCenter)
+            dept.setWordWrap(True)
+            dept.setStyleSheet("""
+                color: #7f8c8d;
+                font-size: 12px;
+                margin-top: 3px;
+                background-color: transparent;
+            """)
+            layout.addWidget(dept)
+
         frame.setLayout(layout)
         return frame
 
     def create_menu_button(self, text, icon, callback):
-        """Menü butonu oluştur"""
+        """Menü butonu - Login buton stili"""
         btn = QPushButton(f"{icon}  {text}")
         btn.setCursor(Qt.PointingHandCursor)
         btn.clicked.connect(callback)
         btn.setStyleSheet("""
             QPushButton {
                 text-align: left;
-                padding: 15px 20px;
+                padding: 16px 22px;
                 border: none;
                 background-color: transparent;
-                color: #ecf0f1;
-                font-size: 14px;
+                color: white;
+                font-size: 15px;
             }
             QPushButton:hover {
-                background-color: #34495e;
+                background-color: rgba(34, 153, 84, 0.7);
                 color: white;
             }
             QPushButton:pressed {
-                background-color: #2c3e50;
+                background-color: rgba(30, 132, 73, 0.9);
             }
         """)
         return btn
@@ -292,114 +251,155 @@ class MainDashboard(QMainWindow):
         content = QFrame()
         content.setStyleSheet("""
             QFrame {
-                background-color: #ecf0f1;
+                background-color: #f8f9fa;
             }
         """)
 
         layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        # Başlık
-        header = QLabel('Hoş Geldiniz')
-        header.setStyleSheet("""
-            QLabel {
-                font-size: 28px;
-                font-weight: bold;
-                color: #2c3e50;
-                padding: 30px;
-            }
-        """)
+        # Üst bar - Login form kartı gibi beyaz
+        top_bar = self.create_top_bar()
+        layout.addWidget(top_bar)
 
-        # İstatistikler (Dashboard)
+        # İstatistikler
         stats = self.create_statistics_section()
-
-        layout.addWidget(header)
         layout.addWidget(stats)
+
         layout.addStretch()
 
         content.setLayout(layout)
         return content
 
+    def create_top_bar(self):
+        """Üst bilgi çubuğu - Login form kartı gibi"""
+        bar = QFrame()
+        bar.setStyleSheet("""
+            QFrame {
+                background-color: rgba(255, 255, 255, 0.98);
+                border-bottom: 3px solid #27ae60;
+                margin: 20px 20px 0px 20px;
+                border-radius: 15px 15px 0px 0px;
+            }
+        """)
+
+        layout = QHBoxLayout()
+        layout.setContentsMargins(35, 25, 35, 25)
+
+        # Hoş geldiniz - Login "Hoş Geldiniz" ile aynı renk
+        welcome = QLabel(f'Hoş Geldiniz, {self.user["ad_soyad"]}')
+        welcome.setStyleSheet("""
+            color: #27ae60;
+            font-size: 26px;
+            font-weight: bold;
+        """)
+
+        # Rol badge - Login buton ile aynı stil
+        role_badge = QLabel(f'🎓 {self.user["rol"]}')
+        role_badge.setStyleSheet("""
+            color: white;
+            background-color: #27ae60;
+            padding: 10px 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: bold;
+        """)
+
+        layout.addWidget(welcome)
+        layout.addStretch()
+        layout.addWidget(role_badge)
+
+        bar.setLayout(layout)
+        return bar
+
     def create_statistics_section(self):
-        """İstatistik kartları"""
+        """İstatistik kartları - Login form kartı gibi beyaz"""
         frame = QFrame()
-        frame.setStyleSheet("background-color: transparent;")
+        frame.setStyleSheet("background: transparent;")
 
         layout = QGridLayout()
         layout.setSpacing(20)
-        layout.setContentsMargins(30, 0, 30, 30)
+        layout.setContentsMargins(20, 20, 20, 20)
 
-        # Admin ise tüm bölümlerin istatistiklerini göster
+        # İstatistikler
         if self.permission_manager.can_manage_all_departments():
             stats = [
-                ('Toplam Bölüm', self.get_department_count(), '#3498db'),
-                ('Toplam Derslik', self.get_classroom_count(), '#2ecc71'),
-                ('Toplam Ders', self.get_course_count(), '#e74c3c'),
-                ('Toplam Öğrenci', self.get_student_count(), '#f39c12'),
+                ('Toplam Bölüm', self.get_department_count(), '#27ae60', '🏛️'),
+                ('Toplam Derslik', self.get_classroom_count(), '#3498db', '🏫'),
+                ('Toplam Ders', self.get_course_count(), '#e74c3c', '📚'),
+                ('Toplam Öğrenci', self.get_student_count(), '#f39c12', '👨‍🎓'),
             ]
         else:
-            # Koordinatör ise sadece kendi bölümünün istatistiklerini göster
             stats = [
-                ('Derslikler', self.get_classroom_count(self.user['bolum_id']), '#3498db'),
-                ('Dersler', self.get_course_count(self.user['bolum_id']), '#2ecc71'),
-                ('Öğrenciler', self.get_student_count(self.user['bolum_id']), '#e74c3c'),
-                ('Sınavlar', self.get_exam_count(self.user['bolum_id']), '#f39c12'),
+                ('Dersliklerim', self.get_classroom_count(self.user['bolum_id']), '#27ae60', '🏫'),
+                ('Derslerim', self.get_course_count(self.user['bolum_id']), '#3498db', '📚'),
+                ('Öğrencilerim', self.get_student_count(self.user['bolum_id']), '#e74c3c', '👨‍🎓'),
+                ('Sınavlarım', self.get_exam_count(self.user['bolum_id']), '#f39c12', '📅'),
             ]
 
-        for i, (title, value, color) in enumerate(stats):
-            card = self.create_stat_card(title, value, color)
+        for i, (title, value, color, icon) in enumerate(stats):
+            card = self.create_stat_card(title, value, color, icon)
             layout.addWidget(card, i // 2, i % 2)
 
         frame.setLayout(layout)
         return frame
 
-    def create_stat_card(self, title, value, color):
-        """İstatistik kartı"""
+    def create_stat_card(self, title, value, color, icon):
+        """İstatistik kartı - Login form kartı gibi"""
         card = QFrame()
         card.setStyleSheet(f"""
             QFrame {{
-                background-color: white;
-                border-radius: 10px;
+                background-color: rgba(255, 255, 255, 0.98);
+                border-radius: 20px;
                 border-left: 5px solid {color};
             }}
         """)
-        card.setFixedHeight(120)
+        card.setFixedHeight(140)
 
         layout = QVBoxLayout()
-        layout.setContentsMargins(20, 15, 20, 15)
+        layout.setContentsMargins(25, 20, 25, 20)
+        layout.setSpacing(8)
+
+        # Üst kısım
+        top_layout = QHBoxLayout()
+
+        icon_label = QLabel(icon)
+        icon_label.setStyleSheet("font-size: 36px;")
 
         title_label = QLabel(title)
         title_label.setStyleSheet("""
-            QLabel {
-                color: #7f8c8d;
-                font-size: 13px;
-            }
+            color: #2c3e50;
+            font-size: 15px;
+            font-weight: 600;
         """)
 
+        top_layout.addWidget(icon_label)
+        top_layout.addWidget(title_label)
+        top_layout.addStretch()
+
+        # Değer - Login input rengi gibi
         value_label = QLabel(str(value))
         value_label.setStyleSheet(f"""
-            QLabel {{
-                color: {color};
-                font-size: 36px;
-                font-weight: bold;
-            }}
+            color: {color};
+            font-size: 40px;
+            font-weight: bold;
         """)
 
-        layout.addWidget(title_label)
+        layout.addLayout(top_layout)
         layout.addWidget(value_label)
         layout.addStretch()
 
         card.setLayout(layout)
         return card
 
-    # =================== İSTATİSTİK FONKSİYONLARI ===================
+    # =================== İSTATİSTİKLER ===================
 
     def get_department_count(self):
-        """Toplam bölüm sayısı"""
         result = Database.execute_query("SELECT COUNT(*) as count FROM bolumler WHERE aktif = true")
         return result[0]['count'] if result else 0
 
     def get_classroom_count(self, bolum_id=None):
-        """Derslik sayısı"""
         if bolum_id:
             result = Database.execute_query(
                 "SELECT COUNT(*) as count FROM derslikler WHERE bolum_id = %s AND aktif = true",
@@ -410,7 +410,6 @@ class MainDashboard(QMainWindow):
         return result[0]['count'] if result else 0
 
     def get_course_count(self, bolum_id=None):
-        """Ders sayısı"""
         if bolum_id:
             result = Database.execute_query(
                 "SELECT COUNT(*) as count FROM dersler WHERE bolum_id = %s AND aktif = true",
@@ -421,7 +420,6 @@ class MainDashboard(QMainWindow):
         return result[0]['count'] if result else 0
 
     def get_student_count(self, bolum_id=None):
-        """Öğrenci sayısı"""
         if bolum_id:
             result = Database.execute_query(
                 "SELECT COUNT(*) as count FROM ogrenciler WHERE bolum_id = %s AND aktif = true",
@@ -432,7 +430,6 @@ class MainDashboard(QMainWindow):
         return result[0]['count'] if result else 0
 
     def get_exam_count(self, bolum_id=None):
-        """Sınav sayısı"""
         if bolum_id:
             result = Database.execute_query(
                 "SELECT COUNT(*) as count FROM sinavlar WHERE bolum_id = %s",
@@ -442,66 +439,52 @@ class MainDashboard(QMainWindow):
             result = Database.execute_query("SELECT COUNT(*) as count FROM sinavlar")
         return result[0]['count'] if result else 0
 
-    # =================== MENÜ CALLBACK FONKSİYONLARI ===================
+    # =================== MENÜ FONKSİYONLARI ===================
 
     def show_dashboard(self):
-        """Ana sayfa"""
         QMessageBox.information(self, 'Ana Sayfa', 'Ana sayfa zaten açık!')
 
     def open_user_management(self):
-        """Kullanıcı yönetimi (Sadece Admin)"""
         if not self.permission_manager.has_permission('KULLANICI_EKLE'):
-            QMessageBox.warning(self, 'Yetki Hatası', 'Bu işlem için yetkiniz yok!')
+            self.show_permission_error()
             return
-
-        QMessageBox.information(self, 'Kullanıcı Yönetimi', 'Kullanıcı yönetim ekranı açılacak...')
+        QMessageBox.information(self, 'Kullanıcı Yönetimi', 'Kullanıcı yönetim ekranı hazırlanıyor...')
 
     def open_classroom_management(self):
-        """Derslik yönetimi"""
         if not self.permission_manager.has_permission('DERSLIK_YONET'):
-            QMessageBox.warning(self, 'Yetki Hatası', 'Bu işlem için yetkiniz yok!')
+            self.show_permission_error()
             return
-
-        QMessageBox.information(self, 'Derslik Yönetimi', 'Derslik yönetim ekranı açılacak...')
+        QMessageBox.information(self, 'Derslik Yönetimi', 'Derslik yönetim ekranı hazırlanıyor...')
 
     def open_course_upload(self):
-        """Ders listesi yükleme"""
         if not self.permission_manager.has_permission('DERS_YUKLE'):
-            QMessageBox.warning(self, 'Yetki Hatası', 'Bu işlem için yetkiniz yok!')
+            self.show_permission_error()
             return
-
-        QMessageBox.information(self, 'Ders Yükleme', 'Ders yükleme ekranı açılacak...')
+        QMessageBox.information(self, 'Ders Yükleme', 'Excel yükleme ekranı hazırlanıyor...')
 
     def open_student_upload(self):
-        """Öğrenci listesi yükleme"""
         if not self.permission_manager.has_permission('OGRENCI_YUKLE'):
-            QMessageBox.warning(self, 'Yetki Hatası', 'Bu işlem için yetkiniz yok!')
+            self.show_permission_error()
             return
-
-        QMessageBox.information(self, 'Öğrenci Yükleme', 'Öğrenci yükleme ekranı açılacak...')
+        QMessageBox.information(self, 'Öğrenci Yükleme', 'Excel yükleme ekranı hazırlanıyor...')
 
     def open_exam_scheduler(self):
-        """Sınav programı"""
         if not self.permission_manager.has_permission('SINAV_OLUSTUR'):
-            QMessageBox.warning(self, 'Yetki Hatası', 'Bu işlem için yetkiniz yok!')
+            self.show_permission_error()
             return
-
-        QMessageBox.information(self, 'Sınav Programı', 'Sınav programı ekranı açılacak...')
+        QMessageBox.information(self, 'Sınav Programı', 'Sınav programı ekranı hazırlanıyor...')
 
     def open_seating_plan(self):
-        """Oturma planı"""
         if not self.permission_manager.has_permission('OTURMA_PLAN'):
-            QMessageBox.warning(self, 'Yetki Hatası', 'Bu işlem için yetkiniz yok!')
+            self.show_permission_error()
             return
-
-        QMessageBox.information(self, 'Oturma Planı', 'Oturma planı ekranı açılacak...')
+        QMessageBox.information(self, 'Oturma Planı', 'Oturma planı ekranı hazırlanıyor...')
 
     def open_reports(self):
-        """Raporlar"""
-        QMessageBox.information(self, 'Raporlar', 'Rapor ekranı açılacak...')
+        QMessageBox.information(self, 'Raporlar', 'Rapor ekranı hazırlanıyor...')
 
     def logout(self):
-        """Çıkış yap"""
+        """Çıkış - Login'e dön (Login ile aynı stil)"""
         reply = QMessageBox.question(
             self,
             'Çıkış',
@@ -511,15 +494,46 @@ class MainDashboard(QMainWindow):
 
         if reply == QMessageBox.Yes:
             self.close()
-            # Login ekranını tekrar aç
-            # TODO: Login window'u tekrar göster
+            from student_system.views.login_window import LoginWindow
+            self.login_window = LoginWindow()
+            self.login_window.show()
+
+    def show_permission_error(self):
+        """Yetki hatası - Login hata mesajı ile aynı stil"""
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle('⚠️ Yetki Hatası')
+        msg.setText('Bu işlem için yetkiniz bulunmamaktadır.')
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.setStyleSheet("""
+            QMessageBox {
+                background-color: white;
+            }
+            QMessageBox QLabel {
+                color: #2c3e50;
+                font-size: 13px;
+                min-width: 300px;
+            }
+            QPushButton {
+                background-color: #f39c12;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                padding: 8px 20px;
+                font-weight: bold;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #e67e22;
+            }
+        """)
+        msg.exec_()
 
 
-# Test
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    app.setFont(QFont('Segoe UI', 10))
 
-    # Test kullanıcısı (normalde login'den gelecek)
     test_user = {
         'id': 1,
         'ad_soyad': 'Sistem Admin',
