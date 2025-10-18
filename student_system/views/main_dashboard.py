@@ -387,11 +387,12 @@ class MainDashboard(QMainWindow):
 
     def open_course_upload(self):
         if not self.permission_manager.has_permission('DERS_YUKLE'):
-            self.show_permission_error(); return
+            self.show_permission_error();
+            return
 
         from student_system.views.excel_uploader import ExcelUploader
         self.clear_content_area()
-        uploader = ExcelUploader(self)
+        uploader = ExcelUploader(self.user, self)
         self.content_layout.addWidget(uploader)
 
     def open_student_upload(self):
