@@ -50,6 +50,14 @@ class Database:
             conn.close()
 
     @staticmethod
+    def execute_non_query(query: str, params: tuple = None) -> int:
+        """
+        Sonuç döndürmeyen DML sorguları (INSERT/UPDATE/DELETE) için yardımcı.
+        Dönüş: etkilenen satır sayısı
+        """
+        return Database.execute_query(query, params, fetch=False)
+
+    @staticmethod
     def authenticate_user(email: str, password: str) -> Optional[Dict]:
         """
         Kullanıcı girişi yap

@@ -390,7 +390,7 @@ class MainDashboard(QMainWindow):
             self.show_permission_error();
             return
 
-        from student_system.views.excel_uploader import ExcelUploader
+        from student_system.views.lessonList_uploader import ExcelUploader
         self.clear_content_area()
         uploader = ExcelUploader(self.user, self)
         self.content_layout.addWidget(uploader)
