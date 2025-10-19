@@ -42,7 +42,7 @@ def canonical_header(cell_text: str):
     return None
 
 
-class ExcelUploader(QWidget):
+class LessonListUploader(QWidget):
     def __init__(self, user, parent=None):
         super().__init__(parent)
         self.user = user

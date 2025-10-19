@@ -168,9 +168,9 @@ class MainDashboard(QMainWindow):
         if pm.has_permission('DERSLIK_YONET'):
             items.append({'text': 'Derslik Yönetimi', 'icon': '🏫', 'callback': self.open_classroom_management})
         if pm.has_permission('DERS_YUKLE'):
-            items.append({'text': 'Ders Listesi Yükle', 'icon': '📚', 'callback': self.open_course_upload})
+            items.append({'text': 'Ders Listesi İşlemleri', 'icon': '📚', 'callback': self.open_course_upload})
         if pm.has_permission('OGRENCI_YUKLE'):
-            items.append({'text': 'Öğrenci Listesi Yükle', 'icon': '👨‍🎓', 'callback': self.open_student_upload})
+            items.append({'text': 'Öğrenci Listesi İşlemleri', 'icon': '👨‍🎓', 'callback': self.open_student_upload})
         if pm.has_permission('SINAV_OLUSTUR'):
             items.append({'text': 'Sınav Programı', 'icon': '📅', 'callback': self.open_exam_scheduler})
         if pm.has_permission('OTURMA_PLAN'):
@@ -387,18 +387,22 @@ class MainDashboard(QMainWindow):
 
     def open_course_upload(self):
         if not self.permission_manager.has_permission('DERS_YUKLE'):
-            self.show_permission_error();
+            self.show_permission_error()
             return
 
-        from student_system.views.lessonList_uploader import ExcelUploader
+        from student_system.views.lesson_list import LessonListUploader
         self.clear_content_area()
-        uploader = ExcelUploader(self.user, self)
+        uploader = LessonListUploader(self.user, self)
         self.content_layout.addWidget(uploader)
 
     def open_student_upload(self):
         if not self.permission_manager.has_permission('OGRENCI_YUKLE'):
-            self.show_permission_error(); return
-        QMessageBox.information(self, 'Öğrenci Yükleme', 'Excel yükleme ekranı hazırlanıyor...')
+            self.show_permission_error()
+            return
+        from student_system.views.student_list import StudentListUploader
+        self.clear_content_area()
+        uploader2 = StudentListUploader(self.user, self)
+        self.content_layout.addWidget(uploader2)
 
     def open_exam_scheduler(self):
         if not self.permission_manager.has_permission('SINAV_OLUSTUR'):

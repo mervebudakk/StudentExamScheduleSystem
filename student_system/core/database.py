@@ -128,6 +128,22 @@ class Database:
         """)
 
     @staticmethod
+    def execute_many(query, data_list):
+        """
+        Birden fazla kayıt için toplu sorgu çalıştırır.
+        """
+        conn = Database.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.executemany(query, data_list)
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()
+
+    @staticmethod
     def get_classrooms_by_department(bolum_id: int) -> List[Dict]:
         """Bölüme ait derslikleri getir"""
         return Database.execute_query("""
