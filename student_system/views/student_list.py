@@ -2,7 +2,7 @@ import re
 import unicodedata
 import pandas as pd
 from PyQt5.QtCore import QThread, pyqtSignal
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox, QProgressBar
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox, QProgressBar,QHBoxLayout, QLineEdit, QTableWidget, QTableWidgetItem, QTextEdit
 from student_system.core.database import Database
 
 # Başlık eşleşmeleri
@@ -99,6 +99,50 @@ class StudentUploadWorker(QThread):
 
 # 📁 Ana PyQt arayüzü
 class StudentListUploader(QWidget):
+    def load_students(self):
+        """Veritabanındaki öğrencileri tabloya yükler."""
+        students = Database.execute_query("""
+            SELECT ogrenci_no, ad_soyad, sinif
+            FROM ogrenciler
+            WHERE bolum_id = %s
+            ORDER BY ogrenci_no
+        """, (self.user["bolum_id"],))
+        self.table.setRowCount(len(students))
+        for row, s in enumerate(students):
+            self.table.setItem(row, 0, QTableWidgetItem(str(s["ogrenci_no"])))
+            self.table.setItem(row, 1, QTableWidgetItem(s["ad_soyad"]))
+            self.table.setItem(row, 2, QTableWidgetItem(str(s["sinif"])))
+
+    def search_student(self):
+        """Öğrenci numarasına göre arama yapar ve aldığı dersleri listeler."""
+        ogr_no = self.search_box.text().strip()
+        if not ogr_no:
+            QMessageBox.warning(self, "Uyarı", "Lütfen bir öğrenci numarası girin.")
+            return
+
+        ogrenci = Database.execute_query("""
+            SELECT ogrenci_id, ad_soyad FROM ogrenciler
+            WHERE ogrenci_no = %s AND bolum_id = %s
+        """, (ogr_no, self.user["bolum_id"]))
+
+        if not ogrenci:
+            self.result_area.setText("❌ Öğrenci bulunamadı.")
+            return
+
+        ogr = ogrenci[0]
+        dersler = Database.execute_query("""
+            SELECT d.ders_adi, d.ders_kodu
+            FROM ogrencidersleri od
+            JOIN dersler d ON od.ders_id = d.ders_id
+            WHERE od.ogrenci_id = %s
+            ORDER BY d.ders_kodu
+        """, (ogr["ogrenci_id"],))
+
+        text = f"👤 Öğrenci: {ogr['ad_soyad']}\n📘 Aldığı Dersler:\n"
+        for d in dersler:
+            text += f"- {d['ders_adi']} (Kodu: {d['ders_kodu']})\n"
+
+        self.result_area.setText(text if dersler else "📭 Bu öğrenciye ait ders kaydı yok.")
     def __init__(self, user, parent=None):
         super().__init__(parent)
         self.user = user
@@ -109,17 +153,41 @@ class StudentListUploader(QWidget):
             return
 
         layout = QVBoxLayout(self)
-        self.title = QLabel(f"🎓 {self.user['bolum_adi']} - Öğrenci Listesi Yükleyici")
+
+        # 📌 Başlık
+        self.title = QLabel(f"🎓 {self.user['bolum_adi']} - Öğrenci Listesi")
         self.title.setStyleSheet("font-size: 20px; font-weight: bold; color: #2c3e50;")
         layout.addWidget(self.title)
 
-        self.progress = QProgressBar()
-        self.progress.setValue(0)
-        layout.addWidget(self.progress)
+        # 🔍 Arama kutusu + buton
+        search_layout = QHBoxLayout()
+        self.search_box = QLineEdit()
+        self.search_box.setPlaceholderText("👤 Öğrenci numarasını girin...")
+        search_button = QPushButton("Ara")
+        search_button.clicked.connect(self.search_student)
+        search_layout.addWidget(self.search_box)
+        search_layout.addWidget(search_button)
+        layout.addLayout(search_layout)
 
+        # 📊 Öğrenci Tablosu
+        self.table = QTableWidget()
+        self.table.setColumnCount(3)
+        self.table.setHorizontalHeaderLabels(["Öğrenci No", "Ad Soyad", "Sınıf"])
+        layout.addWidget(self.table)
+
+        # 📋 Arama Sonucu Gösterimi
+        self.result_area = QTextEdit()
+        self.result_area.setReadOnly(True)
+        self.result_area.setStyleSheet("background:#f9f9f9; padding:8px; font-size:14px;")
+        layout.addWidget(self.result_area)
+
+        # 📁 Excel yükleme butonu (altta küçük bölüm)
         btn = QPushButton("📁 Excel Dosyası Seç ve Yükle")
         btn.clicked.connect(self.upload_excel)
         layout.addWidget(btn)
+
+        # Başlangıçta tabloyu doldur
+        self.load_students()
 
     def upload_excel(self):
         path, _ = QFileDialog.getOpenFileName(self, "Excel Dosyası Seç", "", "Excel Dosyaları (*.xlsx *.xls)")

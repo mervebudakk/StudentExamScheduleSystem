@@ -1,7 +1,7 @@
 import re
 import unicodedata
 import pandas as pd
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox, QTableWidget, QTableWidgetItem, QTextEdit
 from student_system.core.database import Database
 
 HEADER_SYNONYMS = {
@@ -51,15 +51,65 @@ class LessonListUploader(QWidget):
             return
 
         layout = QVBoxLayout(self)
-        title = QLabel(f"📚 {self.user['bolum_adi']} - Ders Listesi Yükleyici")
+        title = QLabel(f"📚 {self.user['bolum_adi']} - Ders Listesi")
         title.setStyleSheet("font-size: 20px; font-weight: bold; color: #27ae60;")
         layout.addWidget(title)
 
-        btn = QPushButton("Excel Dosyası Seç")
+        # 📘 Ders Listesi Tablosu
+        self.lesson_table = QTableWidget()
+        self.lesson_table.setColumnCount(2)
+        self.lesson_table.setHorizontalHeaderLabels(["Ders Kodu", "Ders Adı"])
+        self.lesson_table.cellClicked.connect(self.show_students_for_lesson)
+        layout.addWidget(self.lesson_table)
+
+        # 📋 Seçilen derse ait öğrenci listesi alanı
+        self.student_info = QTextEdit()
+        self.student_info.setReadOnly(True)
+        layout.addWidget(self.student_info)
+
+        # 📁 Excel Yükleme butonu
+        btn = QPushButton("📁 Excel Dosyası Seç ve Yükle")
         btn.clicked.connect(self.upload_excel)
         layout.addWidget(btn)
 
-    # ----------------- Ana Akış -----------------
+        self.setLayout(layout)
+        self.load_lessons()
+
+        # 📚 Veritabanından dersleri çekip tabloya doldur
+
+    def load_lessons(self):
+        dersler = Database.execute_query(
+            "SELECT ders_kodu, ders_adi FROM dersler WHERE bolum_id = %s ORDER BY ders_kodu",
+            (self.user['bolum_id'],)
+        )
+        self.lesson_table.setRowCount(len(dersler))
+        for row, ders in enumerate(dersler):
+            self.lesson_table.setItem(row, 0, QTableWidgetItem(ders['ders_kodu']))
+            self.lesson_table.setItem(row, 1, QTableWidgetItem(ders['ders_adi']))
+
+        # 👨‍🎓 Seçilen dersin öğrencilerini getir
+
+    def show_students_for_lesson(self, row, column):
+        ders_kodu = self.lesson_table.item(row, 0).text()
+        ders_adi = self.lesson_table.item(row, 1).text()
+
+        query = """
+                    SELECT o.ogrenci_no, o.ad_soyad
+                    FROM ogrencidersleri od
+                    JOIN ogrenciler o ON o.ogrenci_id = od.ogrenci_id
+                    JOIN dersler d ON d.ders_id = od.ders_id
+                    WHERE d.ders_kodu = %s AND d.bolum_id = %s
+                    ORDER BY o.ogrenci_no
+                """
+        ogrenciler = Database.execute_query(query, (ders_kodu, self.user['bolum_id']))
+
+        if not ogrenciler:
+            self.student_info.setText(f"{ders_kodu} - {ders_adi} dersini alan öğrenci bulunamadı.")
+            return
+
+        text = f"📘 {ders_kodu} - {ders_adi}\n\nDersi Alan Öğrenciler:\n"
+        text += "\n".join([f"{o['ogrenci_no']} - {o['ad_soyad']}" for o in ogrenciler])
+        self.student_info.setText(text)
 
     def upload_excel(self):
         path, _ = QFileDialog.getOpenFileName(self, "Excel Dosyası Seç", "", "Excel Dosyaları (*.xlsx *.xls)")
