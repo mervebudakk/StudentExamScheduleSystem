@@ -381,9 +381,11 @@ class MainDashboard(QMainWindow):
             self.show_permission_error()
             return
 
+            # Ayrı pencere yerine içerik alanını doldur
         from student_system.views.classroom_management import ClassroomManagement
-        self.classroom_win = ClassroomManagement(self.user, self.permission_manager)  # parent=None
-        self.classroom_win.show()
+        self.clear_content_area()
+        self.cm_widget = ClassroomManagement(self.user, self.permission_manager, parent=self)
+        self.content_layout.addWidget(self.cm_widget)
 
     def open_course_upload(self):
         if not self.permission_manager.has_permission('DERS_YUKLE'):
