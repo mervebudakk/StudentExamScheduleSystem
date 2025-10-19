@@ -1,11 +1,12 @@
 import re
 import unicodedata
 import pandas as pd
-from PyQt5.QtCore import QThread, pyqtSignal
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox, QProgressBar,QHBoxLayout, QLineEdit, QTableWidget, QTableWidgetItem, QTextEdit
+from PyQt5.QtCore import QThread, pyqtSignal, Qt
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox, QProgressBar, \
+    QHBoxLayout, QLineEdit, QTableWidget, QTableWidgetItem, QTextEdit, QHeaderView, QFrame
+from PyQt5.QtGui import QFont
 from student_system.core.database import Database
 
-# Başlık eşleşmeleri
 HEADER_SYNONYMS = {
     'ogrenci_no': {'ogrenci no', 'ogrencino', 'ogrenci_numarasi', 'numara', 'öğrenci no', 'öğrenci numarası', 'no'},
     'ad_soyad': {'ad soyad', 'ogrenci ad soyad', 'öğrenci adı', 'öğrenci isim', 'isim', 'ad', 'soyad'},
@@ -32,7 +33,6 @@ def canonical_header(cell_text: str):
     return None
 
 
-# 🧵 Arka planda yüklemeyi yapacak Worker Thread
 class StudentUploadWorker(QThread):
     progress = pyqtSignal(int)
     finished = pyqtSignal(int, int)
@@ -48,7 +48,6 @@ class StudentUploadWorker(QThread):
             inserted_students = 0
             inserted_relations = 0
 
-            # 1️⃣ Öğrencileri toplu ekle
             ogrenci_values = [
                 (s["ogrenci_no"], s["ad_soyad"], self.bolum_id, s["sinif"])
                 for s in self.students
@@ -59,16 +58,16 @@ class StudentUploadWorker(QThread):
                 ON CONFLICT (ogrenci_no) DO NOTHING
             """, ogrenci_values)
 
-            # 2️⃣ Tüm öğrencilerin ID’lerini al
             ogrenci_map = {
                 row["ogrenci_no"]: row["ogrenci_id"]
-                for row in Database.execute_query("SELECT ogrenci_id, ogrenci_no FROM ogrenciler WHERE bolum_id = %s", (self.bolum_id,))
+                for row in Database.execute_query("SELECT ogrenci_id, ogrenci_no FROM ogrenciler WHERE bolum_id = %s",
+                                                  (self.bolum_id,))
             }
 
-            # 3️⃣ Tüm derslerin ID’lerini al
             ders_map = {
                 row["ders_kodu"]: row["ders_id"]
-                for row in Database.execute_query("SELECT ders_id, ders_kodu FROM dersler WHERE bolum_id = %s", (self.bolum_id,))
+                for row in
+                Database.execute_query("SELECT ders_id, ders_kodu FROM dersler WHERE bolum_id = %s", (self.bolum_id,))
             }
 
             relation_values = []
@@ -81,7 +80,6 @@ class StudentUploadWorker(QThread):
                 if idx % 100 == 0:
                     self.progress.emit(int(idx / len(self.students) * 100))
 
-            # 4️⃣ Öğrenci-ders ilişkilerini toplu ekle
             Database.execute_many("""
                 INSERT INTO ogrencidersleri (ogrenci_id, ders_id)
                 VALUES (%s, %s)
@@ -97,10 +95,8 @@ class StudentUploadWorker(QThread):
             self.error.emit(str(e))
 
 
-# 📁 Ana PyQt arayüzü
 class StudentListUploader(QWidget):
     def load_students(self):
-        """Veritabanındaki öğrencileri tabloya yükler."""
         students = Database.execute_query("""
             SELECT ogrenci_no, ad_soyad, sinif
             FROM ogrenciler
@@ -114,10 +110,9 @@ class StudentListUploader(QWidget):
             self.table.setItem(row, 2, QTableWidgetItem(str(s["sinif"])))
 
     def search_student(self):
-        """Öğrenci numarasına göre arama yapar ve aldığı dersleri listeler."""
         ogr_no = self.search_box.text().strip()
         if not ogr_no:
-            QMessageBox.warning(self, "Uyarı", "Lütfen bir öğrenci numarası girin.")
+            self.show_warning("Uyarı", "Lütfen bir öğrenci numarası girin.")
             return
 
         ogrenci = Database.execute_query("""
@@ -126,7 +121,8 @@ class StudentListUploader(QWidget):
         """, (ogr_no, self.user["bolum_id"]))
 
         if not ogrenci:
-            self.result_area.setText("❌ Öğrenci bulunamadı.")
+            self.result_area.setHtml(
+                "<div style='color: #e74c3c; font-size: 15px; padding: 15px;'>❌ Öğrenci bulunamadı.</div>")
             return
 
         ogr = ogrenci[0]
@@ -138,11 +134,29 @@ class StudentListUploader(QWidget):
             ORDER BY d.ders_kodu
         """, (ogr["ogrenci_id"],))
 
-        text = f"👤 Öğrenci: {ogr['ad_soyad']}\n📘 Aldığı Dersler:\n"
-        for d in dersler:
-            text += f"- {d['ders_adi']} (Kodu: {d['ders_kodu']})\n"
+        html = f"""
+        <div style='padding: 15px; font-family: Segoe UI;'>
+            <div style='color: #16a085; font-size: 16px; font-weight: bold; margin-bottom: 12px;'>
+                👤 Öğrenci: {ogr['ad_soyad']}
+            </div>
+            <div style='color: #2c3e50; font-size: 15px; font-weight: 600; margin-bottom: 8px;'>
+                📘 Aldığı Dersler:
+            </div>
+        """
 
-        self.result_area.setText(text if dersler else "📭 Bu öğrenciye ait ders kaydı yok.")
+        if dersler:
+            for d in dersler:
+                html += f"""
+                <div style='color: #34495e; font-size: 14px; margin-left: 20px; margin-bottom: 4px;'>
+                    • {d['ders_adi']} <span style='color: #7f8c8d;'>(Kodu: {d['ders_kodu']})</span>
+                </div>
+                """
+        else:
+            html += "<div style='color: #95a5a6; font-size: 14px; margin-left: 20px;'>📭 Bu öğrenciye ait ders kaydı yok.</div>"
+
+        html += "</div>"
+        self.result_area.setHtml(html)
+
     def __init__(self, user, parent=None):
         super().__init__(parent)
         self.user = user
@@ -153,38 +167,195 @@ class StudentListUploader(QWidget):
             return
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setSpacing(20)
 
-        # 📌 Başlık
+        title_frame = QFrame()
+        title_frame.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #27ae60, stop:1 #16a085);
+                border-radius: 12px;
+                padding: 15px;
+            }
+        """)
+        title_layout = QVBoxLayout(title_frame)
+
         self.title = QLabel(f"🎓 {self.user['bolum_adi']} - Öğrenci Listesi")
-        self.title.setStyleSheet("font-size: 20px; font-weight: bold; color: #2c3e50;")
-        layout.addWidget(self.title)
+        self.title.setAlignment(Qt.AlignCenter)
+        self.title.setStyleSheet("font-size: 22px; font-weight: bold; color: white; background: transparent;")
+        title_layout.addWidget(self.title)
 
-        # 🔍 Arama kutusu + buton
-        search_layout = QHBoxLayout()
+        layout.addWidget(title_frame)
+
+        search_frame = QFrame()
+        search_frame.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border: 2px solid #bdc3c7;
+                border-radius: 12px;
+                padding: 15px;
+            }
+        """)
+        search_layout = QHBoxLayout(search_frame)
+        search_layout.setSpacing(10)
+
+        search_label = QLabel("🔍")
+        search_label.setStyleSheet("font-size: 20px; background: transparent; border: none;")
+
         self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("👤 Öğrenci numarasını girin...")
-        search_button = QPushButton("Ara")
-        search_button.clicked.connect(self.search_student)
-        search_layout.addWidget(self.search_box)
-        search_layout.addWidget(search_button)
-        layout.addLayout(search_layout)
+        self.search_box.setPlaceholderText("Öğrenci numarasını girin...")
+        self.search_box.setStyleSheet("""
+            QLineEdit {
+                padding: 12px 15px;
+                border: 2px solid #bdc3c7;
+                border-radius: 8px;
+                font-size: 14px;
+                background-color: #f8f9fa;
+                color: #2c3e50;
+            }
+            QLineEdit:focus {
+                border: 2px solid #16a085;
+                background-color: white;
+            }
+        """)
+        self.search_box.returnPressed.connect(self.search_student)
 
-        # 📊 Öğrenci Tablosu
+        search_button = QPushButton("Ara")
+        search_button.setCursor(Qt.PointingHandCursor)
+        search_button.clicked.connect(self.search_student)
+        search_button.setFixedHeight(45)
+        search_button.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #16a085, stop:1 #138d75);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 0 25px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #138d75, stop:1 #117a65);
+            }
+            QPushButton:pressed {
+                background: #0e6655;
+            }
+        """)
+
+        search_layout.addWidget(search_label)
+        search_layout.addWidget(self.search_box, 1)
+        search_layout.addWidget(search_button)
+
+        layout.addWidget(search_frame)
+
+        table_label = QLabel("📋 Kayıtlı Öğrenciler")
+        table_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50; margin-top: 10px;")
+        layout.addWidget(table_label)
+
         self.table = QTableWidget()
         self.table.setColumnCount(3)
         self.table.setHorizontalHeaderLabels(["Öğrenci No", "Ad Soyad", "Sınıf"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setAlternatingRowColors(True)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                border: 2px solid #bdc3c7;
+                border-radius: 10px;
+                gridline-color: #ecf0f1;
+                font-size: 13px;
+            }
+            QTableWidget::item {
+                padding: 8px;
+                color: #2c3e50;
+            }
+            QTableWidget::item:selected {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #16a085, stop:1 #138d75);
+                color: white;
+            }
+            QHeaderView::section {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #27ae60, stop:1 #16a085);
+                color: white;
+                padding: 10px;
+                border: none;
+                font-weight: bold;
+                font-size: 13px;
+            }
+            QTableWidget::item:alternate {
+                background-color: #f8f9fa;
+            }
+        """)
         layout.addWidget(self.table)
 
-        # 📋 Arama Sonucu Gösterimi
+        result_label = QLabel("📄 Arama Sonucu")
+        result_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50; margin-top: 10px;")
+        layout.addWidget(result_label)
+
         self.result_area = QTextEdit()
         self.result_area.setReadOnly(True)
-        self.result_area.setStyleSheet("background:#f9f9f9; padding:8px; font-size:14px;")
+        self.result_area.setMaximumHeight(180)
+        self.result_area.setStyleSheet("""
+            QTextEdit {
+                background-color: white;
+                border: 2px solid #bdc3c7;
+                border-radius: 10px;
+                padding: 10px;
+                font-size: 14px;
+                color: #2c3e50;
+            }
+        """)
         layout.addWidget(self.result_area)
 
-        # 📁 Excel yükleme butonu (altta küçük bölüm)
-        btn = QPushButton("📁 Excel Dosyası Seç ve Yükle")
-        btn.clicked.connect(self.upload_excel)
-        layout.addWidget(btn)
+        self.upload_btn = QPushButton("📁 Excel Dosyası Seç ve Yükle")
+        self.upload_btn.setCursor(Qt.PointingHandCursor)
+        self.upload_btn.clicked.connect(self.upload_excel)
+        self.upload_btn.setFixedHeight(50)
+        self.upload_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #3498db, stop:1 #2980b9);
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 15px;
+                font-weight: bold;
+                margin-top: 10px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #2980b9, stop:1 #21618c);
+            }
+            QPushButton:pressed {
+                background: #1a5276;
+            }
+        """)
+        layout.addWidget(self.upload_btn)
+
+        self.progress = QProgressBar()
+        self.progress.setVisible(False)
+        self.progress.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid #bdc3c7;
+                border-radius: 8px;
+                text-align: center;
+                background-color: #f8f9fa;
+                height: 25px;
+                color: #2c3e50;
+                font-weight: bold;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #27ae60, stop:0.5 #16a085, stop:1 #138d75);
+                border-radius: 6px;
+            }
+        """)
+        layout.addWidget(self.progress)
 
         # Başlangıçta tabloyu doldur
         self.load_students()
@@ -198,7 +369,9 @@ class StudentListUploader(QWidget):
             df = pd.read_excel(path, header=0)
             students = self.parse_students(df)
 
-            # 🧵 Thread başlat
+            self.progress.setVisible(True)
+            self.progress.setValue(0)
+
             self.worker = StudentUploadWorker(students, self.user["bolum_id"])
             self.worker.progress.connect(self.on_progress)
             self.worker.finished.connect(self.on_finished)
@@ -206,7 +379,7 @@ class StudentListUploader(QWidget):
             self.worker.start()
 
         except Exception as e:
-            QMessageBox.critical(self, "❌ Hata", f"Öğrenci listesi okunurken hata oluştu:\n{str(e)}")
+            self.show_error("Hata", f"Öğrenci listesi okunurken hata oluştu:\n{str(e)}")
 
     def parse_students(self, df: pd.DataFrame):
         colmap = {}
@@ -245,8 +418,107 @@ class StudentListUploader(QWidget):
         self.progress.setValue(value)
 
     def on_finished(self, ogr_count, rel_count):
-        QMessageBox.information(self, "✅ Yükleme Tamamlandı",
-                                f"📌 {ogr_count} öğrenci işlendi\n🔗 {rel_count} öğrenci-ders ilişkisi eklendi")
+        self.progress.setVisible(False)
+        self.show_success("Yükleme Tamamlandı",
+                          f"📌 {ogr_count} öğrenci işlendi\n🔗 {rel_count} öğrenci-ders ilişkisi eklendi")
+        self.load_students()
 
     def on_error(self, msg):
-        QMessageBox.critical(self, "❌ Hata", f"Yükleme sırasında hata oluştu:\n{msg}")
+        self.progress.setVisible(False)
+        self.show_error("Hata", f"Yükleme sırasında hata oluştu:\n{msg}")
+
+    def show_error(self, title, message):
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Critical)
+        msg.setWindowTitle(f"❌ {title}")
+        msg.setText(message)
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.setStyleSheet("""
+            QMessageBox {
+                background-color: white;
+            }
+            QMessageBox QLabel {
+                color: #2c3e50;
+                font-size: 13px;
+                min-width: 300px;
+            }
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #e74c3c, stop:1 #c0392b);
+                color: white;
+                border: none;
+                border-radius: 5px;
+                padding: 8px 20px;
+                font-weight: bold;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #c0392b, stop:1 #a93226);
+            }
+        """)
+        msg.exec_()
+
+    def show_success(self, title, message):
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Information)
+        msg.setWindowTitle(f"✅ {title}")
+        msg.setText(message)
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.setStyleSheet("""
+            QMessageBox {
+                background-color: white;
+            }
+            QMessageBox QLabel {
+                color: #2c3e50;
+                font-size: 13px;
+                min-width: 300px;
+            }
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #27ae60, stop:1 #229954);
+                color: white;
+                border: none;
+                border-radius: 5px;
+                padding: 8px 20px;
+                font-weight: bold;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #229954, stop:1 #1e8449);
+            }
+        """)
+        msg.exec_()
+
+    def show_warning(self, title, message):
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle(f"⚠️ {title}")
+        msg.setText(message)
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.setStyleSheet("""
+            QMessageBox {
+                background-color: white;
+            }
+            QMessageBox QLabel {
+                color: #2c3e50;
+                font-size: 13px;
+                min-width: 300px;
+            }
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #f39c12, stop:1 #e67e22);
+                color: white;
+                border: none;
+                border-radius: 5px;
+                padding: 8px 20px;
+                font-weight: bold;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #e67e22, stop:1 #d35400);
+            }
+        """)
+        msg.exec_()
