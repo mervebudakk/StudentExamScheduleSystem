@@ -411,6 +411,14 @@ class ClassroomManagement(QWidget):
                 int(self.inp_yapi.value()),
                 self.current_id
             ))
+            Database.execute_non_query("""
+                UPDATE Derslikler
+                SET kapasite = enine_sira_sayisi * boyuna_sira_sayisi * sira_yapisi
+                WHERE derslik_id = %s
+            """, (self.current_id if self.current_id is not None else
+                                                         Database.execute_query(
+                                                             "SELECT currval(pg_get_serial_sequence('derslikler','derslik_id')) AS id")[
+                                                             0]["id"],))
             QMessageBox.information(self, "Bilgi", "Derslik güncellendi.")
         self._load_table()
 
