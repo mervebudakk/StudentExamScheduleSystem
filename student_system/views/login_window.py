@@ -175,6 +175,7 @@ class LoginWindow(QMainWindow):
         completer.setCaseSensitivity(Qt.CaseInsensitive)
         completer.setCompletionMode(QCompleter.PopupCompletion)
         self.email_input.setCompleter(completer)
+        self._domain_completer = completer  # (istersen sakla)
 
         # Yazılanı dinle ve öneriyi güncelle
         def update_completion(text):
@@ -229,35 +230,6 @@ class LoginWindow(QMainWindow):
 
         card.setLayout(layout)
         return card
-
-    def _email_autocomplete(self, text: str):
-        # '@' yoksa popup kapat
-        if '@' not in text:
-            self.domain_completer.popup().hide()
-            return
-
-        local, domain_part = text.split('@', 1)
-        # '@' yazıldıysa veya domain kısmi ise öneri çıkar
-        self.domain_completer.setCompletionPrefix(domain_part)
-        self.domain_completer.complete(self.email_input.cursorRect())
-
-    def _apply_domain_completion(self, domain: str):
-        # Popup'tan seçim yapınca tam adresi yaz
-        local = self.email_input.text().split('@', 1)[0]
-        self.email_input.setText(f"{local}@{domain}")
-
-    def eventFilter(self, obj, event):
-        # Tab ile tamamla
-        if obj is self.email_input and event.type() == QEvent.KeyPress and event.key() == Qt.Key_Tab:
-            text = self.email_input.text()
-            if '@' in text:
-                local, domain_part = text.split('@', 1)
-                # popup seçili değilse de varsayılan domaini uygula
-                domain = self.domain_completer.currentCompletion() or "kocaeli.edu.tr"
-                if not domain_part or not domain_part.endswith('.tr'):
-                    self.email_input.setText(f"{local}@{domain}")
-                    return True  # Tab'i tükettik
-        return super().eventFilter(obj, event)
 
     def create_input_field(self, label_text, placeholder, is_password=False):
         container = QWidget()
