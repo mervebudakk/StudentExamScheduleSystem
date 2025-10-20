@@ -7,6 +7,9 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 from student_system.core.database import Database
+from student_system.views.classroom_seatmap import ClassroomDetailPanel
+from PyQt5.QtWidgets import QDialog
+import re
 
 
 class ClassroomManagement(QWidget):
@@ -141,6 +144,8 @@ class ClassroomManagement(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setSelectionBehavior(self.table.SelectRows)
         self.table.setEditTriggers(self.table.NoEditTriggers)
+        self.table.itemDoubleClicked.connect(self._open_detail_by_item)
+
         tv.addWidget(self.table)
         root.addWidget(table_frame)
 
@@ -275,18 +280,31 @@ class ClassroomManagement(QWidget):
             self.table.setItem(row, 5, QTableWidgetItem(str(r["sira_yapisi"])))
             self.table.setItem(row, 6, QTableWidgetItem(self._dept_name(r["bolum_id"])))
 
-            act = QWidget(); h = QHBoxLayout(act); h.setContentsMargins(0,0,0,0)
-            btn_edit = QToolButton(); btn_edit.setText("✏️ Düzenle")
+            act = QWidget();
+            h = QHBoxLayout(act);
+            h.setContentsMargins(0, 0, 0, 0)
+
+            btn_view = QToolButton();
+            btn_view.setText("💺 Detay")
+            btn_view.setCursor(Qt.PointingHandCursor)
+            btn_view.clicked.connect(lambda _, _id=r["derslik_id"]: self._open_detail(_id))
+
+            btn_edit = QToolButton();
+            btn_edit.setText("✏️ Düzenle")
             btn_edit.setCursor(Qt.PointingHandCursor)
             btn_edit.clicked.connect(lambda _, _id=r["derslik_id"]: self._start_edit(_id))
 
-            btn_del = QToolButton(); btn_del.setText("🗑️ Sil")
+            btn_del = QToolButton();
+            btn_del.setText("🗑️ Sil")
             btn_del.setCursor(Qt.PointingHandCursor)
             btn_del.clicked.connect(lambda _, _id=r["derslik_id"]: self._delete_by_id(_id))
 
-            h.addWidget(btn_edit); h.addWidget(btn_del); h.addStretch()
+            h.addWidget(btn_view)
+            h.addWidget(btn_edit)
+            h.addWidget(btn_del)
+            h.addStretch()
+
             self.table.setCellWidget(row, 7, act)
-            self.table.item(row, 0).setData(Qt.UserRole, r["derslik_id"])
 
         self._cancel_form(silent=True)
 
@@ -412,3 +430,30 @@ class ClassroomManagement(QWidget):
         Database.execute_non_query("DELETE FROM Derslikler WHERE derslik_id=%s", (derslik_id,))
         QMessageBox.information(self, "Bilgi", "Derslik silindi.")
         self._load_table()
+
+    def _open_detail_by_item(self, item):
+        derslik_id = self.table.item(item.row(), 0).data(Qt.UserRole)
+        if derslik_id:
+            self._open_detail(derslik_id)
+
+    def _open_detail(self, derslik_id: int):
+        row = Database.execute_query("""
+            SELECT derslik_id, bolum_id, derslik_kodu, derslik_adi, kapasite,
+                   enine_sira_sayisi, boyuna_sira_sayisi, sira_yapisi
+            FROM Derslikler WHERE derslik_id=%s
+        """, (derslik_id,))
+        if not row:
+            QMessageBox.warning(self, "Bulunamadı", "Derslik bulunamadı.")
+            return
+
+        rec = row[0]
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"Derslik Detayı — {rec['derslik_kodu']}")
+        dlg.setMinimumSize(760, 540)
+
+        panel = ClassroomDetailPanel(rec, dlg)
+        lay = QVBoxLayout(dlg)
+        lay.addWidget(panel)
+
+        dlg.exec_()
+
