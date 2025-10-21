@@ -11,6 +11,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from student_system.core.database import Database
 from student_system.views.seat_plan import SeatPlanView
+import traceback
+
 
 
 
@@ -413,12 +415,18 @@ class MainDashboard(QMainWindow):
             self.show_permission_error(); return
         QMessageBox.information(self, 'Sınav Programı', 'Sınav programı ekranı hazırlanıyor...')
 
-    def open_seat_plan(self):
+    def open_seating_plan(self):
         if not self.permission_manager.has_permission('OTURMA_PLAN'):
-            self.show_permission_error(); return
-        self.clear_content_area()  # içerik alanını boşalt
-        self.seatplan_widget = SeatPlanView(self.user, self.permission_manager, parent=self)
-        self.content_layout.addWidget(self.seatplan_widget)  # aynı ClassroomManagement mantığı
+            self.show_permission_error();
+            return
+        try:
+            from student_system.views.seat_plan import SeatPlanView  # burada import
+            self.clear_content_area()
+            self.seatplan_widget = SeatPlanView(self.user, self.permission_manager, parent=self)
+            self.content_layout.addWidget(self.seatplan_widget)
+        except Exception as e:
+            QMessageBox.critical(self, "Oturma Planı",
+                                 f"Ekran yüklenirken hata:\n\n{e}\n\n{traceback.format_exc()}")
 
     def open_reports(self):
         QMessageBox.information(self, 'Raporlar', 'Rapor ekranı hazırlanıyor...')

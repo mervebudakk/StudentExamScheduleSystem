@@ -138,7 +138,7 @@ class SeatPlanView(QWidget):
                    d.enine_sira_sayisi, d.boyuna_sira_sayisi, d.sira_yapisi,
                    COALESCE((
                      SELECT COUNT(*)
-                     FROM oturma_plani op
+                     FROM oturmaplani op
                      WHERE op.sinav_id = %s AND op.derslik_id = d.derslik_id
                    ),0) AS atanan
             FROM sinav_derslikleri sd
@@ -198,7 +198,7 @@ class SeatPlanView(QWidget):
 
         # Buraya yerleştirme algoritmanızı çağırın:
         # 1) sinav_id için öğrencileri çek
-        # 2) kapasite ve kısıtlara göre oturma_plani’na yaz
+        # 2) kapasite ve kısıtlara göre oturmaplani’na yaz
         # 3) atanan sayısını güncelle
         # Şimdilik sadece iskelet:
         try:
