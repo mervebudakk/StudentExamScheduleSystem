@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (
 )
 from student_system.core.database import Database
 from student_system.views.classroom_seatmap import SeatMapWidget  # görsel önizleme için
-
+import math
 class SeatPlanView(QWidget):
     """
     MainDashboard içerik alanında çalışan 'Oturma Planı' ekranı.
@@ -105,24 +105,38 @@ class SeatPlanView(QWidget):
 
     # ---------- Data ----------
     def _load_exams(self):
-        # Kullanıcının bölümüne göre filtrele (admin ise tümü)
+        # Admin ise tüm sınavlar, değilse kendi bölümüne göre
         if self.pm.can_manage_all_departments():
             rows = Database.execute_query("""
-                SELECT s.sinav_id, s.sinav_adi, s.sinav_tarihi, s.baslangic_saati
+                SELECT s.sinav_id,
+                       s.sinav_tarihi,
+                       s.sinav_saati,
+                       s.sinav_turu,
+                       d.ders_kodu,
+                       d.ders_adi
                 FROM sinavlar s
-                ORDER BY s.sinav_tarihi, s.baslangic_saati
+                JOIN dersler d ON d.ders_id = s.ders_id
+                ORDER BY s.sinav_tarihi, s.sinav_saati
             """)
         else:
             rows = Database.execute_query("""
-                SELECT s.sinav_id, s.sinav_adi, s.sinav_tarihi, s.baslangic_saati
+                SELECT s.sinav_id,
+                       s.sinav_tarihi,
+                       s.sinav_saati,
+                       s.sinav_turu,
+                       d.ders_kodu,
+                       d.ders_adi
                 FROM sinavlar s
+                JOIN dersler d ON d.ders_id = s.ders_id
                 WHERE s.bolum_id = %s
-                ORDER BY s.sinav_tarihi, s.baslangic_saati
+                ORDER BY s.sinav_tarihi, s.sinav_saati
             """, (self.user["bolum_id"],))
 
         self.cmb_exam.clear()
         for r in rows or []:
-            label = f"{r['sinav_adi']} — {r['sinav_tarihi']} {str(r['baslangic_saati'])[:5]}"
+            # ekranda gösterilecek etiket
+            saat = str(r["sinav_saati"])[:5] if r["sinav_saati"] is not None else "--:--"
+            label = f"{r['ders_kodu']} – {r['ders_adi']} ({r['sinav_turu']}) — {r['sinav_tarihi']} {saat}"
             self.cmb_exam.addItem(label, r["sinav_id"])
 
         if rows:
@@ -141,7 +155,7 @@ class SeatPlanView(QWidget):
                      FROM oturmaplani op
                      WHERE op.sinav_id = %s AND op.derslik_id = d.derslik_id
                    ),0) AS atanan
-            FROM sinav_derslikleri sd
+            FROM sinavderslikleri sd          -- <<< DÜZELTİLDİ
             JOIN derslikler d ON d.derslik_id = sd.derslik_id
             WHERE sd.sinav_id = %s
             ORDER BY d.derslik_kodu
@@ -155,13 +169,16 @@ class SeatPlanView(QWidget):
         # tablo
         self.tbl_rooms.setRowCount(0)
         for r in self.rooms:
-            row = self.tbl_rooms.rowCount(); self.tbl_rooms.insertRow(row)
+            row = self.tbl_rooms.rowCount();
+            self.tbl_rooms.insertRow(row)
             self.tbl_rooms.setItem(row, 0, QTableWidgetItem(f"{r['derslik_kodu']} - {r.get('derslik_adi') or ''}"))
             self.tbl_rooms.setItem(row, 1, QTableWidgetItem(str(r['kapasite'])))
-            self.tbl_rooms.setItem(row, 2, QTableWidgetItem(f"{r['enine_sira_sayisi']}×{r['boyuna_sira_sayisi']}×{r['sira_yapisi']}"))
+            self.tbl_rooms.setItem(
+                row, 2,
+                QTableWidgetItem(f"{r['enine_sira_sayisi']}×{r['boyuna_sira_sayisi']} × {r['sira_yapisi']}'li")
+            )
             self.tbl_rooms.setItem(row, 3, QTableWidgetItem(str(r['atanan'])))
 
-        # varsayılan seçim
         if self.rooms:
             self._on_room_changed(0)
 
@@ -178,44 +195,150 @@ class SeatPlanView(QWidget):
 
     def _apply_preview(self, data):
         self.current_room = data
-        self.preview_title.setText(f"Önizleme — {data['derslik_kodu']} ({data['kapasite']})")
-        # SeatMapWidget’ı güncellemek için yeni bir instance yaratmak en kolayı:
+
+        enine = int(data['enine_sira_sayisi'])  # sıra grubu sayısı (kolon)
+        yapi = int(data['sira_yapisi'])  # 2'li / 3'lü
+        kapasite = int(data['kapasite'])
+
+        # PDF kuralına göre efektif satır sayısı
+        seats_per_row = enine * yapi  # her satırdaki oturak
+        rows_needed = max(1, math.ceil(kapasite / seats_per_row))
+
+        # Başlık
+        self.preview_title.setText(
+            f"Önizleme — {data['derslik_kodu']} ({kapasite})  "
+            f"Oturma Düzeni: {rows_needed} satır × {enine} sıra grubu, {yapi}'li"
+        )
+
+        # Eski widget'ı değiştir
         parent = self.preview.parent()
         parent.layout().removeWidget(self.preview)
         self.preview.deleteLater()
+
+        # SeatMapWidget kapasiteye göre çizsin: boyuna=rows_needed gönderiyoruz
         self.preview = SeatMapWidget(
-            enine=data['enine_sira_sayisi'],
-            boyuna=data['boyuna_sira_sayisi'],
-            yapi=data['sira_yapisi'],
-            kapasite=data['kapasite']
+            enine=enine,
+            boyuna=rows_needed,  # <<< kritik: veri 'boyuna' yerine kapasiteye göre
+            yapi=yapi,
+            kapasite=kapasite
         )
         parent.layout().addWidget(self.preview)
 
     # ---------- Actions ----------
     def _generate_plan(self):
         if not self.current_exam_id or not self.current_room:
-            QMessageBox.warning(self, "Uyarı", "Lütfen sınav ve derslik seçiniz."); return
-
-        # Buraya yerleştirme algoritmanızı çağırın:
-        # 1) sinav_id için öğrencileri çek
-        # 2) kapasite ve kısıtlara göre oturmaplani’na yaz
-        # 3) atanan sayısını güncelle
-        # Şimdilik sadece iskelet:
+            QMessageBox.warning(self, "Uyarı", "Lütfen sınav ve derslik seçiniz.")
+            return
         try:
-            # TODO: yerleştirme SQL/algoritma entegrasyonu
-            QMessageBox.information(self, "Bilgi", "Oturma planı oluşturuldu/güncellendi (örnek).")
+            sql = """
+            WITH P AS (
+              SELECT 
+                s.sinav_id,
+                d.derslik_id,
+                d.enine_sira_sayisi AS cols,
+                d.boyuna_sira_sayisi AS rows,
+                d.kapasite
+              FROM sinavlar s
+              JOIN derslikler d ON d.derslik_id = %(derslik_id)s
+              WHERE s.sinav_id = %(sinav_id)s
+            ),
+            OGRENCI AS (
+              SELECT o.ogrenci_id,
+                     ROW_NUMBER() OVER (ORDER BY o.ogrenci_no) AS rn
+              FROM ogrencidersleri od
+              JOIN sinavlar s ON s.sinav_id = %(sinav_id)s AND s.ders_id = od.ders_id
+              JOIN ogrenciler o ON o.ogrenci_id = od.ogrenci_id
+            ),
+            KOLTUK AS (
+              SELECT 
+                (g.i / (SELECT cols FROM P)) + 1 AS sira_no,
+                (g.i % (SELECT cols FROM P)) + 1 AS sutun_no,
+                ROW_NUMBER() OVER (ORDER BY g.i) AS rn
+              FROM generate_series(0, (SELECT (rows*cols) FROM P) - 1) g(i)
+            ),
+            SECIM AS (
+              SELECT 
+                (SELECT sinav_id FROM P)   AS sinav_id,
+                (SELECT derslik_id FROM P) AS derslik_id,
+                K.sira_no, K.sutun_no, O.ogrenci_id
+              FROM KOLTUK K
+              JOIN OGRENCI O ON O.rn = K.rn
+              WHERE K.rn <= LEAST( (SELECT rows*cols FROM P), (SELECT kapasite FROM P) )
+            )
+            INSERT INTO oturmaplani (sinav_id, ogrenci_id, derslik_id, sira_no, sutun_no, olusturma_tarihi)
+            SELECT sinav_id, ogrenci_id, derslik_id, sira_no, sutun_no, NOW()
+            FROM SECIM
+            ON CONFLICT (sinav_id, derslik_id, ogrenci_id)
+            DO UPDATE SET
+              sira_no = EXCLUDED.sira_no,
+              sutun_no = EXCLUDED.sutun_no,
+              olusturma_tarihi = NOW();
+            """
+            Database.execute_query(sql, {
+                "sinav_id": self.current_exam_id,
+                "derslik_id": self.current_room["derslik_id"],
+            })
+            QMessageBox.information(self, "Başarılı", "Oturma planı oluşturuldu/güncellendi.")
             self._load_rooms_for_exam()
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Plan oluşturulurken hata:\n{e}")
 
     def _export_pdf(self):
-        if not self.current_exam_id:
-            QMessageBox.warning(self, "Uyarı", "Lütfen bir sınav seçiniz."); return
+        if not self.current_exam_id or not self.current_room:
+            QMessageBox.warning(self, "Uyarı", "Lütfen sınav ve derslik seçiniz.")
+            return
         try:
-            # TODO: ReportLab / WeasyPrint ile PDF üretimini burada yapacağız
-            # - Salon oturma planı
-            # - Gözetmen listesi
+            # 1) Başlık bilgileri (ders, tarih, saat, sınav türü, derslik)
+            header = Database.execute_query("""
+                SELECT 
+                    s.sinav_id, s.sinav_tarihi, s.sinav_saati, s.sinav_turu,
+                    d2.ders_kodu, d2.ders_adi,
+                    dl.derslik_kodu, dl.derslik_adi,
+                    dl.enine_sira_sayisi, dl.boyuna_sira_sayisi, dl.sira_yapisi, dl.kapasite
+                FROM sinavlar s
+                JOIN dersler d2    ON d2.ders_id = s.ders_id
+                JOIN derslikler dl ON dl.derslik_id = %s
+                WHERE s.sinav_id = %s
+            """, (self.current_room["derslik_id"], self.current_exam_id))
+            if not header:
+                QMessageBox.warning(self, "Uyarı", "Başlık bilgileri bulunamadı.")
+                return
+            h = header[0]
+
+            # 2) Oturma planı listesi (sıra/sütun + öğrenci)
+            rows = Database.execute_query("""
+                SELECT op.sira_no, op.sutun_no,
+                       o.ogrenci_no,
+                       (o.ad || ' ' || o.soyad) AS ogrenci_adi
+                FROM oturmaplani op
+                JOIN ogrenciler o ON o.ogrenci_id = op.ogrenci_id
+                WHERE op.sinav_id = %s AND op.derslik_id = %s
+                ORDER BY op.sira_no, op.sutun_no
+            """, (self.current_exam_id, self.current_room["derslik_id"])) or []
+
+            # 3) PDF düzen bilgisi (kapasiteye göre satır hesapla)
+            enine = int(h["enine_sira_sayisi"])
+            yapi = int(h["sira_yapisi"])
+            kapasite = int(h["kapasite"])
+            seats_per_row = enine * yapi
+            rows_needed = max(1, math.ceil(kapasite / seats_per_row))
+
+            # 4) Şimdilik doğrulama - (sonraki adımda ReportLab ile gerçek PDF basacağız)
+            QMessageBox.information(
+                self, "PDF",
+                f"PDF verisi hazırlandı.\n\n"
+                f"Ders: {h['ders_kodu']} – {h['ders_adi']} ({h['sinav_turu']})\n"
+                f"Tarih/Saat: {h['sinav_tarihi']} {str(h['sinav_saati'])[:5]}\n"
+                f"Derslik: {h['derslik_kodu']} – {h.get('derslik_adi') or ''}\n"
+                f"Düzen: {rows_needed} satır × {enine} grup × {yapi}'li (kapasite: {kapasite})\n"
+                f"Atanan öğrenci: {len(rows)}"
+            )
+            # TODO:
             # - Kapı etiketi
-            QMessageBox.information(self, "PDF", "PDF üretimi (örnek). Birazdan dolduracağız.")
+            # - Yerleşim şeması (rows_needed × enine, grup başına yapi adet)
+            # - Öğrenci listesi (sira_no, sutun_no, ogrenci_no, ogrenci_adi)
+            # için ReportLab/WeasyPrint ile gerçek PDF çıktısı oluştur
+
         except Exception as e:
             QMessageBox.critical(self, "PDF Hatası", f"PDF oluşturulamadı:\n{e}")
+
