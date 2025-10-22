@@ -280,8 +280,8 @@ class ClassroomManagement(QWidget):
             self.table.setItem(row, 5, QTableWidgetItem(str(r["sira_yapisi"])))
             self.table.setItem(row, 6, QTableWidgetItem(self._dept_name(r["bolum_id"])))
 
-            act = QWidget();
-            h = QHBoxLayout(act);
+            act = QWidget()
+            h = QHBoxLayout(act)
             h.setContentsMargins(0, 0, 0, 0)
 
             btn_view = QToolButton();
