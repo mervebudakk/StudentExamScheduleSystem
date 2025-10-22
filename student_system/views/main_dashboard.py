@@ -407,13 +407,16 @@ class MainDashboard(QMainWindow):
             return
         from student_system.views.student_list import StudentListUploader
         self.clear_content_area()
-        uploader2 = StudentListUploader(self.user, self)
-        self.content_layout.addWidget(uploader2)
+        uploader = StudentListUploader(self.user, self)
+        self.content_layout.addWidget(uploader)
 
     def open_exam_scheduler(self):
         if not self.permission_manager.has_permission('SINAV_OLUSTUR'):
             self.show_permission_error(); return
-        QMessageBox.information(self, 'Sınav Programı', 'Sınav programı ekranı hazırlanıyor...')
+        from student_system.views.exam_scheduler import ExamScheduler
+        self.clear_content_area()
+        uploader = ExamScheduler(self.user, self)
+        self.content_layout.addWidget(uploader)
 
     def open_seating_plan(self):
         if not self.permission_manager.has_permission('OTURMA_PLAN'):
