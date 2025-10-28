@@ -1,136 +1,451 @@
-# student_system/views/exam_scheduler.py
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QListWidget, QListWidgetItem,
     QGroupBox, QFormLayout, QDateEdit, QCheckBox, QComboBox, QSpinBox, QTableWidget,
-    QTableWidgetItem, QMessageBox, QFileDialog
+    QTableWidgetItem, QMessageBox, QFileDialog, QScrollArea, QFrame
 )
 from PyQt5.QtCore import Qt, QDate
+from PyQt5.QtGui import QFont, QColor, QPalette
 from student_system.core.database import Database
 import json
 from datetime import datetime, timedelta, time
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
-from datetime import datetime
 import pandas as pd
 
-
-# psycopg2 importları aşağıdan kaldırıldı, artık Database sınıfı üzerinden yönetiliyor.
 
 class ExamScheduler(QWidget):
     def __init__(self, user, parent=None):
         super().__init__(parent)
         self.user = user
+
         if not self.user or not self.user.get("bolum_id"):
             QMessageBox.critical(self, "Hata", "Bölüm bilgisi olmayan kullanıcı işlem yapamaz.")
             return
 
-        self.setLayout(self._build_ui())
+        self._init_ui()
+        self._apply_modern_styles()
         self._load_lessons()
 
-    # ---------- UI ----------
-    def _build_ui(self):
-        root = QVBoxLayout()
+    def _init_ui(self):
+        main_layout = QVBoxLayout(self)
+        main_layout.setSpacing(20)
+        main_layout.setContentsMargins(25, 25, 25, 25)
 
-        title = QLabel(f"📅 {self.user['bolum_adi']} – Sınav Programı Oluştur")
-        title.setStyleSheet("font-size:20px;font-weight:bold;color:#27ae60;")
-        root.addWidget(title)
+        self._create_header(main_layout)
 
-        main = QHBoxLayout()
-        root.addLayout(main)
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(20)
 
-        # SOL: Kısıtlar
-        left = QVBoxLayout()
-        main.addLayout(left, 1)
+        self._create_left_panel(content_layout)
+        self._create_right_panel(content_layout)
 
-        # 1) Ders Seçimi
-        gb_lessons = QGroupBox("1) Ders Seçimi")
-        v1 = QVBoxLayout(gb_lessons)
+        main_layout.addLayout(content_layout)
+
+    def _create_header(self, parent_layout):
+        header_frame = QFrame()
+        header_frame.setObjectName("headerFrame")
+        header_layout = QVBoxLayout(header_frame)
+
+        title = QLabel(f"📅 {self.user['bolum_adi']}")
+        title.setObjectName("mainTitle")
+        title.setAlignment(Qt.AlignCenter)
+
+        subtitle = QLabel("Sınav Programı Oluşturma Sistemi")
+        subtitle.setObjectName("subtitle")
+        subtitle.setAlignment(Qt.AlignCenter)
+
+        header_layout.addWidget(title)
+        header_layout.addWidget(subtitle)
+        parent_layout.addWidget(header_frame)
+
+    def _create_left_panel(self, parent_layout):
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setObjectName("scrollArea")
+
+        left_widget = QWidget()
+        left_layout = QVBoxLayout(left_widget)
+        left_layout.setSpacing(15)
+
+        self._create_lesson_selection_group(left_layout)
+        self._create_date_settings_group(left_layout)
+        self._create_exam_settings_group(left_layout)
+        self._create_action_buttons(left_layout)
+
+        left_layout.addStretch()
+        scroll_area.setWidget(left_widget)
+        parent_layout.addWidget(scroll_area, 2)
+
+    def _create_lesson_selection_group(self, parent_layout):
+        group = QGroupBox("📚 Ders Seçimi")
+        group.setObjectName("modernGroup")
+        layout = QVBoxLayout(group)
+
         self.lesson_list = QListWidget()
-        self.lesson_list.setSelectionMode(self.lesson_list.NoSelection)
-        v1.addWidget(self.lesson_list)
+        self.lesson_list.setObjectName("lessonList")
+        self.lesson_list.setSelectionMode(QListWidget.NoSelection)
+        layout.addWidget(self.lesson_list)
 
-        btns = QHBoxLayout()
-        self.btn_all = QPushButton("Tümünü Seç")
-        self.btn_none = QPushButton("Tümünü Kaldır")
+        button_layout = QHBoxLayout()
+
+        self.btn_all = QPushButton("✓ Tümünü Seç")
+        self.btn_all.setObjectName("primaryButton")
         self.btn_all.clicked.connect(lambda: self._toggle_all(True))
+
+        self.btn_none = QPushButton("✗ Tümünü Kaldır")
+        self.btn_none.setObjectName("secondaryButton")
         self.btn_none.clicked.connect(lambda: self._toggle_all(False))
-        btns.addWidget(self.btn_all);
-        btns.addWidget(self.btn_none)
-        v1.addLayout(btns)
-        left.addWidget(gb_lessons)
 
-        # 2) Tarih ve Günler
-        gb_dates = QGroupBox("2) Sınav Tarihleri ve Günleri")
-        f2 = QFormLayout(gb_dates)
-        self.date_from = QDateEdit(QDate.currentDate());
+        button_layout.addWidget(self.btn_all)
+        button_layout.addWidget(self.btn_none)
+        layout.addLayout(button_layout)
+
+        parent_layout.addWidget(group)
+
+    def _create_date_settings_group(self, parent_layout):
+        group = QGroupBox("📆 Tarih ve Gün Ayarları")
+        group.setObjectName("modernGroup")
+        form_layout = QFormLayout(group)
+        form_layout.setSpacing(10)
+
+        self.date_from = QDateEdit(QDate.currentDate())
         self.date_from.setCalendarPopup(True)
-        self.date_to = QDateEdit(QDate.currentDate().addDays(14));
+        self.date_from.setObjectName("dateEdit")
+
+        self.date_to = QDateEdit(QDate.currentDate().addDays(14))
         self.date_to.setCalendarPopup(True)
-        f2.addRow("Başlangıç:", self.date_from)
-        f2.addRow("Bitiş:", self.date_to)
+        self.date_to.setObjectName("dateEdit")
 
-        days_row = QHBoxLayout()
-        # hafta içi default açık, hafta sonu hariç tutulabilir
-        self.chk_mon = QCheckBox("Pzt");
-        self.chk_mon.setChecked(True)
-        self.chk_tue = QCheckBox("Sal");
-        self.chk_tue.setChecked(True)
-        self.chk_wed = QCheckBox("Çar");
-        self.chk_wed.setChecked(True)
-        self.chk_thu = QCheckBox("Per");
-        self.chk_thu.setChecked(True)
-        self.chk_fri = QCheckBox("Cum");
-        self.chk_fri.setChecked(True)
-        self.chk_sat = QCheckBox("Cmt");
-        self.chk_sat.setChecked(False)
-        self.chk_sun = QCheckBox("Paz");
-        self.chk_sun.setChecked(False)
-        for w in [self.chk_mon, self.chk_tue, self.chk_wed, self.chk_thu, self.chk_fri, self.chk_sat, self.chk_sun]:
-            days_row.addWidget(w)
-        f2.addRow("Dahil Günler:", days_row)
-        left.addWidget(gb_dates)
+        form_layout.addRow("Başlangıç Tarihi:", self.date_from)
+        form_layout.addRow("Bitiş Tarihi:", self.date_to)
 
-        # 3) Tür, 4) Süre, 5) Bekleme, 6) Çakışma
-        gb_other = QGroupBox("Diğer Ayarlar")
-        f3 = QFormLayout(gb_other)
-        self.cmb_type = QComboBox();
+        days_label = QLabel("Sınav Günleri:")
+        days_label.setObjectName("formLabel")
+        form_layout.addRow(days_label)
+
+        days_layout = QHBoxLayout()
+        days_layout.setSpacing(5)
+
+        self.chk_mon = self._create_day_checkbox("Pzt", True)
+        self.chk_tue = self._create_day_checkbox("Sal", True)
+        self.chk_wed = self._create_day_checkbox("Çar", True)
+        self.chk_thu = self._create_day_checkbox("Per", True)
+        self.chk_fri = self._create_day_checkbox("Cum", True)
+        self.chk_sat = self._create_day_checkbox("Cmt", False)
+        self.chk_sun = self._create_day_checkbox("Paz", False)
+
+        for checkbox in [self.chk_mon, self.chk_tue, self.chk_wed, self.chk_thu,
+                         self.chk_fri, self.chk_sat, self.chk_sun]:
+            days_layout.addWidget(checkbox)
+
+        form_layout.addRow(days_layout)
+        parent_layout.addWidget(group)
+
+    def _create_day_checkbox(self, text, checked):
+        checkbox = QCheckBox(text)
+        checkbox.setObjectName("dayCheckbox")
+        checkbox.setChecked(checked)
+        return checkbox
+
+    def _create_exam_settings_group(self, parent_layout):
+        group = QGroupBox("⚙️ Sınav Ayarları")
+        group.setObjectName("modernGroup")
+        form_layout = QFormLayout(group)
+        form_layout.setSpacing(10)
+
+        self.cmb_type = QComboBox()
+        self.cmb_type.setObjectName("comboBox")
         self.cmb_type.addItems(["Vize", "Final", "Bütünleme"])
-        self.spin_duration = QSpinBox();
-        self.spin_duration.setRange(30, 240);
+
+        self.spin_duration = QSpinBox()
+        self.spin_duration.setObjectName("spinBox")
+        self.spin_duration.setRange(30, 240)
         self.spin_duration.setValue(75)
-        self.spin_break = QSpinBox();
-        self.spin_break.setRange(0, 120);
+        self.spin_duration.setSuffix(" dakika")
+
+        self.spin_break = QSpinBox()
+        self.spin_break.setObjectName("spinBox")
+        self.spin_break.setRange(0, 120)
         self.spin_break.setValue(15)
-        self.chk_no_overlap = QCheckBox("Aynı anda sınav olmasın (tüm dersler tek slotta çakışmasın)")
-        f3.addRow("Sınav Türü:", self.cmb_type)
-        f3.addRow("Varsayılan Süre (dk):", self.spin_duration)
-        f3.addRow("Bekleme Süresi (dk):", self.spin_break)
-        f3.addRow(self.chk_no_overlap)
-        left.addWidget(gb_other)
+        self.spin_break.setSuffix(" dakika")
 
-        # Oluştur butonu
+        self.chk_no_overlap = QCheckBox("Sınavlar çakışmasın")
+        self.chk_no_overlap.setObjectName("settingsCheckbox")
+
+        form_layout.addRow("Sınav Türü:", self.cmb_type)
+        form_layout.addRow("Sınav Süresi:", self.spin_duration)
+        form_layout.addRow("Bekleme Süresi:", self.spin_break)
+        form_layout.addRow(self.chk_no_overlap)
+
+        parent_layout.addWidget(group)
+
+    def _create_action_buttons(self, parent_layout):
         self.btn_generate = QPushButton("🚀 Programı Oluştur")
+        self.btn_generate.setObjectName("generateButton")
+        self.btn_generate.setMinimumHeight(50)
         self.btn_generate.clicked.connect(self._on_generate_clicked)
-        left.addWidget(self.btn_generate)
 
-        self.export_button = QPushButton("📤 Programı İndir")
+        self.export_button = QPushButton("📥 Excel Olarak İndir")
+        self.export_button.setObjectName("exportButton")
+        self.export_button.setMinimumHeight(45)
         self.export_button.clicked.connect(self.export_to_excel)
-        left.addWidget(self.export_button)
 
-        # SAĞ: Önizleme Tablosu
-        right = QVBoxLayout()
-        main.addLayout(right, 1)
+        parent_layout.addWidget(self.btn_generate)
+        parent_layout.addWidget(self.export_button)
+
+    def _create_right_panel(self, parent_layout):
+        right_widget = QWidget()
+        right_layout = QVBoxLayout(right_widget)
+        right_layout.setSpacing(10)
+
+        preview_label = QLabel("📋 Program Önizlemesi")
+        preview_label.setObjectName("sectionTitle")
+        right_layout.addWidget(preview_label)
 
         self.preview = QTableWidget(0, 6)
-        self.preview.setHorizontalHeaderLabels(["Ders Kodu", "Ders Adı", "Tarih", "Saat", "Sınıf", "Derslik"])
+        self.preview.setObjectName("previewTable")
+        self.preview.setHorizontalHeaderLabels([
+            "Ders Kodu", "Ders Adı", "Tarih", "Saat", "Sınıf", "Derslik"
+        ])
         self.preview.horizontalHeader().setStretchLastSection(True)
-        right.addWidget(QLabel("📋 Program Önizlemesi"))
-        right.addWidget(self.preview)
+        self.preview.setAlternatingRowColors(True)
 
-        return root
+        right_layout.addWidget(self.preview)
+        parent_layout.addWidget(right_widget, 3)
 
-    # ---------- Dersleri yükle ----------
+    def _apply_modern_styles(self):
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #f5f7fa;
+                color: #2c3e50;
+                font-family: 'Segoe UI', Arial, sans-serif;
+                font-size: 13px;
+            }
+
+            #headerFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #667eea, stop:1 #764ba2);
+                border-radius: 12px;
+                padding: 25px 20px;
+                min-height: 100px;
+            }
+
+            #mainTitle {
+                font-size: 24px;
+                font-weight: bold;
+                color: white;
+                margin: 8px 5px;
+                padding: 5px;
+            }
+
+            #subtitle {
+                font-size: 15px;
+                color: rgba(255, 255, 255, 0.95);
+                margin: 8px 5px;
+                padding: 5px;
+            }
+
+            #modernGroup {
+                background-color: white;
+                border: 1px solid #e1e8ed;
+                border-radius: 10px;
+                padding: 15px;
+                font-weight: bold;
+                font-size: 14px;
+            }
+
+            #modernGroup::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 5px 10px;
+                color: #667eea;
+            }
+
+            #lessonList {
+                background-color: #fafbfc;
+                border: 1px solid #e1e8ed;
+                border-radius: 8px;
+                padding: 8px;
+                min-height: 200px;
+            }
+
+            #lessonList::item {
+                padding: 8px;
+                border-radius: 5px;
+                margin: 2px 0px;
+            }
+
+            #lessonList::item:hover {
+                background-color: #e8f0fe;
+            }
+
+            #lessonList::item:checked {
+                background-color: #d3e3fd;
+            }
+
+            QPushButton {
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-weight: 500;
+                border: none;
+            }
+
+            #primaryButton {
+                background-color: #667eea;
+                color: white;
+            }
+
+            #primaryButton:hover {
+                background-color: #5568d3;
+            }
+
+            #primaryButton:pressed {
+                background-color: #4451b8;
+            }
+
+            #secondaryButton {
+                background-color: #e1e8ed;
+                color: #2c3e50;
+            }
+
+            #secondaryButton:hover {
+                background-color: #cbd5e0;
+            }
+
+            #generateButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #11998e, stop:1 #38ef7d);
+                color: white;
+                font-size: 15px;
+                font-weight: bold;
+            }
+
+            #generateButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #0e8070, stop:1 #2dd863);
+            }
+
+            #exportButton {
+                background-color: #f39c12;
+                color: white;
+                font-size: 14px;
+                font-weight: bold;
+            }
+
+            #exportButton:hover {
+                background-color: #e67e22;
+            }
+
+            QComboBox, QSpinBox, QDateEdit {
+                background-color: white;
+                border: 1px solid #e1e8ed;
+                border-radius: 6px;
+                padding: 8px 12px;
+                min-height: 35px;
+            }
+
+            QComboBox:hover, QSpinBox:hover, QDateEdit:hover {
+                border: 1px solid #667eea;
+            }
+
+            QComboBox:focus, QSpinBox:focus, QDateEdit:focus {
+                border: 2px solid #667eea;
+            }
+
+            QComboBox::drop-down {
+                border: none;
+                padding-right: 10px;
+            }
+
+            QCheckBox {
+                spacing: 8px;
+            }
+
+            #dayCheckbox {
+                background-color: white;
+                border: 1px solid #e1e8ed;
+                border-radius: 6px;
+                padding: 8px 12px;
+                min-width: 45px;
+            }
+
+            #dayCheckbox:checked {
+                background-color: #667eea;
+                color: white;
+            }
+
+            #dayCheckbox::indicator {
+                width: 0px;
+                height: 0px;
+            }
+
+            #settingsCheckbox {
+                padding: 8px;
+                font-weight: 500;
+            }
+
+            #previewTable {
+                background-color: white;
+                border: 1px solid #e1e8ed;
+                border-radius: 10px;
+                gridline-color: #e1e8ed;
+            }
+
+            #previewTable::item {
+                padding: 10px;
+            }
+
+            #previewTable::item:alternate {
+                background-color: #f8f9fa;
+            }
+
+            QHeaderView::section {
+                background-color: #667eea;
+                color: white;
+                padding: 12px;
+                border: none;
+                font-weight: bold;
+            }
+
+            #sectionTitle {
+                font-size: 16px;
+                font-weight: bold;
+                color: #2c3e50;
+                padding: 10px 5px;
+            }
+
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+
+            QScrollBar:vertical {
+                background: #f5f7fa;
+                width: 12px;
+                border-radius: 6px;
+            }
+
+            QScrollBar::handle:vertical {
+                background: #cbd5e0;
+                border-radius: 6px;
+                min-height: 30px;
+            }
+
+            QScrollBar::handle:vertical:hover {
+                background: #a0aec0;
+            }
+
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+
+            QFormLayout QLabel {
+                font-weight: 500;
+                color: #4a5568;
+            }
+        """)
+
     def _load_lessons(self):
         rows = Database.execute_query("""
             SELECT ders_id, ders_kodu, ders_adi, sinif
@@ -138,41 +453,42 @@ class ExamScheduler(QWidget):
             WHERE bolum_id = %s AND aktif = true
             ORDER BY sinif, ders_kodu
         """, (self.user["bolum_id"],))
+
         self.lesson_list.clear()
         for r in rows or []:
             item = QListWidgetItem(f"{r['ders_kodu']} – {r['ders_adi']} (Sınıf: {r['sinif']})")
-            item.setData(Qt.UserRole, r)  # tüm satırı sakla
+            item.setData(Qt.UserRole, r)
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setCheckState(Qt.Checked)  # default: programa dahil
+            item.setCheckState(Qt.Checked)
             self.lesson_list.addItem(item)
 
-    def _toggle_all(self, checked: bool):
+    def _toggle_all(self, checked):
         state = Qt.Checked if checked else Qt.Unchecked
         for i in range(self.lesson_list.count()):
             self.lesson_list.item(i).setCheckState(state)
 
-    # ---------- Kısıtları topla & doğrula ----------
     def _collect_constraints(self):
-        # seçili dersler
         selected = []
         for i in range(self.lesson_list.count()):
-            it = self.lesson_list.item(i)
-            if it.checkState() == Qt.Checked:
-                selected.append(it.data(Qt.UserRole))
+            item = self.lesson_list.item(i)
+            if item.checkState() == Qt.Checked:
+                selected.append(item.data(Qt.UserRole))
+
         if not selected:
             raise ValueError("Programa dahil edilecek en az bir ders seçmelisiniz.")
 
         d_from = self.date_from.date().toPyDate()
         d_to = self.date_to.date().toPyDate()
+
         if d_to < d_from:
             raise ValueError("Bitiş tarihi başlangıçtan önce olamaz.")
 
-        # dahil günler (0=pzt ... 6=paz)
         allowed_weekdays = []
-        for idx, w in enumerate(
-                [self.chk_mon, self.chk_tue, self.chk_wed, self.chk_thu, self.chk_fri, self.chk_sat, self.chk_sun]
-        ):
-            if w.isChecked():
+        checkboxes = [self.chk_mon, self.chk_tue, self.chk_wed, self.chk_thu,
+                      self.chk_fri, self.chk_sat, self.chk_sun]
+
+        for idx, checkbox in enumerate(checkboxes):
+            if checkbox.isChecked():
                 allowed_weekdays.append(idx)
 
         if not allowed_weekdays:
@@ -187,331 +503,261 @@ class ExamScheduler(QWidget):
             "bitis_tarihi": d_to,
             "allowed_weekdays": allowed_weekdays,
             "ayni_anda_sinav_engelle": self.chk_no_overlap.isChecked(),
-            "dersler": selected
+            "secili_dersler": selected
         }
 
     def _on_generate_clicked(self):
-        DEFAULT_SLOTS = [
-            time(10, 0), time(12, 30), time(14, 0),
-            time(15, 30), time(16, 45), time(17, 45)
-        ]
         try:
-            cons = self._collect_constraints()
-
-            # 🔹 Günleri hesapla
-            start, end = cons["baslangic_tarihi"], cons["bitis_tarihi"]
-            allowed_days = cons["allowed_weekdays"]
-            days = []
-            d = start
-            while d <= end:
-                if d.weekday() in allowed_days:
-                    days.append(d)
-                d += timedelta(days=1)
-            if not days:
-                raise ValueError("Belirtilen aralıkta uygun gün yok!")
-
-            # 🔹 Derslikleri al
-            rooms = Database.execute_query("""
-                SELECT derslik_id, derslik_adi, kapasite
-                FROM derslikler
-                WHERE bolum_id = %s
-                ORDER BY kapasite ASC
-            """, (cons["bolum_id"],))
-            if not rooms:
-                raise ValueError("Tanımlı derslik bulunamadı!")
-
-            # 🔹 Öğrenci-ders ilişkilerini al
-            relations = Database.execute_query("""
-                SELECT od.ogrenci_id, od.ders_id
-                FROM ogrencidersleri od
-                JOIN ogrenciler o ON o.ogrenci_id = od.ogrenci_id
-                WHERE o.bolum_id = %s
-            """, (cons["bolum_id"],))
-
-            ogrenci_ders = {}
-            for r in relations:
-                ogrenci_ders.setdefault(r["ders_id"], set()).add(r["ogrenci_id"])
-
-            # 🔹 Başlangıç boş program
-            program = []
-            used_slots = {}  # {tarih: [slot]}
-            class_days = {}  # {sinif: [tarih]}
-
-            for ders in cons["dersler"]:
-                ders_id = ders["ders_id"]
-                ogrenciler = ogrenci_ders.get(ders_id, set())
-                sinif = ders["sinif"]
-
-                yerlesmis = False
-                for day in days:
-                    # Aynı sınıf o gün sınav yapmış mı? (Dokümandaki kısıt)
-                    if sinif in class_days and day in class_days[sinif]:
-                        # Basit kısıt: Aynı sınıf aynı gün 1'den fazla sınav olmasın
-                        # (Daha iyisi: 2'den fazla olmasın)
-                        if class_days[sinif].count(day) >= 2:
-                            continue
-
-                    for slot in DEFAULT_SLOTS:
-                        # Aynı saatte öğrenciler çakışıyor mu?
-                        conflict = False
-                        for p in program:
-                            if p["tarih"] == day and p["saat"] == slot.strftime("%H:%M"):
-                                ortak = ogrenciler.intersection(ogrenci_ders.get(p["ders_id"], set()))
-                                if ortak:
-                                    conflict = True
-                                    break
-                        if conflict:
-                            continue
-
-                        # Derslik bul
-                        secilen = None
-                        kapasite = len(ogrenciler) if ogrenciler else 30
-                        for r in rooms:
-                            if r["kapasite"] >= kapasite:
-                                secilen = r
-                                break
-                        if not secilen:
-                            # En büyük dersliği ata (sığmasa bile)
-                            secilen = rooms[-1] if rooms else None
-                            if not secilen:
-                                raise ValueError(f"{ders['ders_adi']} için derslik yok!")
-                            print(
-                                f"Uyarı: {ders['ders_adi']} kapasitesi ({kapasite}) en büyük dersliğe ({secilen['kapasite']}) sığmıyor.")
-
-                        # Eşleşme bulundu
-                        program.append({
-                            "ders_id": ders_id,
-                            "ders_kodu": ders["ders_kodu"],
-                            "ders_adi": ders["ders_adi"],
-                            "sinif": sinif,
-                            "tarih": day,
-                            "saat": slot.strftime("%H:%M"),
-                            "derslik": secilen["derslik_adi"]
-                        })
-
-                        # Kullanılmış slot/sınıf gününü işaretle
-                        used_slots.setdefault(day, []).append(slot)
-                        class_days.setdefault(sinif, []).append(day)
-                        yerlesmis = True
-                        break
-
-                    if yerlesmis:
-                        break
-
-                if not yerlesmis:
-                    print(f"Uyarı: {ders['ders_adi']} yerleştirilemedi, uygun gün/slot bulunamadı.")
-
-            # 🔹 Veritabanına kayıt
-            # Önce eski planı sil (aynı bölüm ve sınav türü için)
-            Database.execute_non_query(
-                "DELETE FROM sinavlar WHERE bolum_id = %s AND sinav_turu = %s",
-                (cons["bolum_id"], cons["sinav_turu"])
-            )
-
-            plan_values = []
-            for item in program:
-                plan_values.append((
-                    item["ders_id"], cons["bolum_id"], cons["sinav_turu"],
-                    item["tarih"], item["saat"], cons["varsayilan_sure"], cons["varsayilan_bekleme"]
-                ))
-
-            Database.execute_many("""
-                INSERT INTO sinavlar
-                (ders_id, bolum_id, sinav_turu, sinav_tarihi, sinav_saati, sure, bekleme_suresi, durum)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 'Planlandı')
-            """, plan_values)
-
-            # 🔹 Derslik atamalarını yap
+            constraints = self._collect_constraints()
+            schedule = self._generate_schedule(constraints)
+            self._update_preview(schedule)
             self.assign_exam_rooms()
 
-            rows = Database.execute_query("""
-                SELECT d.ders_kodu, d.ders_adi, s.sinav_tarihi, s.sinav_saati, d.sinif, 
-                       STRING_AGG(dl.derslik_kodu, ', ') AS derslikler
-                FROM Sinavlar s
-                JOIN Dersler d ON s.ders_id = d.ders_id
-                LEFT JOIN SinavDerslikleri sd ON s.sinav_id = sd.sinav_id
-                LEFT JOIN Derslikler dl ON sd.derslik_id = dl.derslik_id
-                WHERE s.bolum_id = %s AND s.sinav_turu = %s
-                GROUP BY d.ders_kodu, d.ders_adi, s.sinav_tarihi, s.sinav_saati, d.sinif
-                ORDER BY s.sinav_tarihi, s.sinav_saati
-            """, (cons["bolum_id"], cons["sinav_turu"]))
-
-            self.preview.setRowCount(len(rows))
-            for i, r in enumerate(rows):
-                self.preview.setItem(i, 0, QTableWidgetItem(r["ders_kodu"]))
-                self.preview.setItem(i, 1, QTableWidgetItem(r["ders_adi"]))
-                tarih_str = r["sinav_tarihi"].strftime("%d.%m.%Y") if r["sinav_tarihi"] else "---"
-                saat_str = r["sinav_saati"].strftime("%H:%M") if r["sinav_saati"] else "--:--"
-                self.preview.setItem(i, 2, QTableWidgetItem(tarih_str))
-                self.preview.setItem(i, 3, QTableWidgetItem(saat_str))
-                self.preview.setItem(i, 4, QTableWidgetItem(str(r["sinif"])))
-                self.preview.setItem(i, 5, QTableWidgetItem(r["derslikler"] or "-"))
-
-            QMessageBox.information(self, "Başarılı", f"{len(rows)} sınav planlandı ✅")
-
+            QMessageBox.information(
+                self,
+                "Başarılı",
+                f"✅ {len(schedule)} adet sınav başarıyla planlandı!"
+            )
+        except ValueError as e:
+            QMessageBox.warning(self, "Uyarı", str(e))
         except Exception as e:
-            QMessageBox.critical(self, "Hata", str(e))
+            QMessageBox.critical(self, "Hata", f"Program oluşturulurken hata: {str(e)}")
+
+    def _generate_schedule(self, c):
+        conn = Database.get_connection()
+        cur = conn.cursor()
+
+        cur.execute("""
+            DELETE FROM Sinavlar 
+            WHERE bolum_id = %s AND sinav_turu = %s
+        """, (c["bolum_id"], c["sinav_turu"]))
+
+        slots = self._build_time_slots(c)
+        schedule = []
+
+        if c["ayni_anda_sinav_engelle"]:
+            for i, ders in enumerate(c["secili_dersler"]):
+                if i >= len(slots):
+                    break
+                tarih, saat_obj = slots[i]
+                schedule.append((ders, tarih, saat_obj))
+        else:
+            schedule = self._greedy_schedule(c, slots)
+
+        for ders, tarih, saat_obj in schedule:
+            cur.execute("""
+                INSERT INTO Sinavlar 
+                (ders_id, bolum_id, sinav_turu, sinav_tarihi, sinav_saati, durum)
+                VALUES (%s, %s, %s, %s, %s, 'Planlandı')
+            """, (ders["ders_id"], c["bolum_id"], c["sinav_turu"],
+                  tarih, saat_obj))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return schedule
+
+    def _build_time_slots(self, c):
+        slots = []
+        current_date = c["baslangic_tarihi"]
+        base_time = time(9, 0)
+
+        while current_date <= c["bitis_tarihi"]:
+            if current_date.weekday() in c["allowed_weekdays"]:
+                current_time = datetime.combine(current_date, base_time)
+
+                while current_time.hour < 17:
+                    slots.append((current_date, current_time.time()))
+
+                    minutes_to_add = c["varsayilan_sure"] + c["varsayilan_bekleme"]
+                    current_time += timedelta(minutes=minutes_to_add)
+
+            current_date += timedelta(days=1)
+
+        return slots
+
+    def _greedy_schedule(self, c, slots):
+        schedule = []
+        ders_ogrenci = {}
+
+        conn = Database.get_connection()
+        cur = conn.cursor()
+
+        for ders in c["secili_dersler"]:
+            cur.execute("""
+                SELECT ogrenci_id 
+                FROM ogrencidersleri 
+                WHERE ders_id = %s
+            """, (ders["ders_id"],))
+            ders_ogrenci[ders["ders_id"]] = {row[0] for row in cur.fetchall()}
+
+        cur.close()
+        conn.close()
+
+        slot_idx = 0
+        for ders in c["secili_dersler"]:
+            placed = False
+
+            for i in range(slot_idx, len(slots)):
+                tarih, saat_obj = slots[i]
+                conflict = False
+
+                for scheduled_ders, s_tarih, s_saat in schedule:
+                    if s_tarih == tarih and s_saat == saat_obj:
+                        ders_ogrenci_ids = ders_ogrenci.get(ders["ders_id"], set())
+                        scheduled_ogrenci_ids = ders_ogrenci.get(scheduled_ders["ders_id"], set())
+
+                        if ders_ogrenci_ids & scheduled_ogrenci_ids:
+                            conflict = True
+                            break
+
+                if not conflict:
+                    schedule.append((ders, tarih, saat_obj))
+                    slot_idx = i
+                    placed = True
+                    break
+
+            if not placed and slots:
+                schedule.append((ders, slots[-1][0], slots[-1][1]))
+
+        return schedule
+
+    def _update_preview(self, schedule):
+        self.preview.setRowCount(0)
+
+        for ders, tarih, saat_obj in schedule:
+            row = self.preview.rowCount()
+            self.preview.insertRow(row)
+
+            self.preview.setItem(row, 0, QTableWidgetItem(ders["ders_kodu"]))
+            self.preview.setItem(row, 1, QTableWidgetItem(ders["ders_adi"]))
+            self.preview.setItem(row, 2, QTableWidgetItem(tarih.strftime("%d.%m.%Y")))
+            self.preview.setItem(row, 3, QTableWidgetItem(saat_obj.strftime("%H:%M")))
+            self.preview.setItem(row, 4, QTableWidgetItem(str(ders.get("sinif", ""))))
+            self.preview.setItem(row, 5, QTableWidgetItem("Atanacak"))
 
     def export_to_excel(self):
-        """Planlanan sınav programını biçimlendirilmiş, tarihe göre sıralı ve öğretim elemanı bilgili Excel olarak dışa aktarır"""
         try:
-            if self.preview.rowCount() == 0:
-                QMessageBox.warning(self, "Uyarı", "Henüz oluşturulmuş bir sınav programı yok.")
-                return
-
             path, _ = QFileDialog.getSaveFileName(
-                self,
-                "Sınav Programını Kaydet",
-                f"{self.user['bolum_adi']}_{self.cmb_type.currentText()}_Programi.xlsx",
-                "Excel Dosyası (*.xlsx)"
+                self, "Excel Dosyası Kaydet", "",
+                "Excel Files (*.xlsx)"
             )
             if not path:
                 return
 
-            # --- Gerekli kütüphaneler ---
-            from openpyxl import Workbook
-            from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-            from openpyxl.utils import get_column_letter
-            from datetime import datetime
-            import pandas as pd
-
-            # --- Veritabanı bağlantısı (DÜZELTİLDİ) ---
             conn = Database.get_connection()
             cur = conn.cursor()
 
-            # --- Verileri al ve tarih/saat'e göre sırala ---
-            data = []
-            for row in range(self.preview.rowCount()):
-                ders_kodu = self.preview.item(row, 0).text()
-                ders_adi = self.preview.item(row, 1).text()
-                tarih = self.preview.item(row, 2).text()
-                saat = self.preview.item(row, 3).text()
-                sinif = self.preview.item(row, 4).text()
-                derslik = self.preview.item(row, 5).text()
+            sinav_turu = self.cmb_type.currentText()
 
-                # Hoca adını çek
-                cur.execute("""
-                    SELECT ou.ad_soyad
-                    FROM Dersler d
-                    LEFT JOIN OgretimUyeleri ou ON d.hoca_id = ou.hoca_id
-                    WHERE d.ders_kodu = %s AND d.bolum_id = %s
-                """, (ders_kodu, self.user['bolum_id']))
-                result = cur.fetchone()
-                ogretim_elemani = result[0] if result and result[0] else "-"
+            cur.execute("""
+                SELECT 
+                    s.sinav_tarihi AS tarih,
+                    s.sinav_saati AS saat,
+                    d.ders_adi AS ders_adi,
+                    COALESCE(ou.ad_soyad, 'Atanmamış') AS ogretim_elemani,
+                    COALESCE(STRING_AGG(dl.derslik_adi, ', '), 'Atanmamış') AS derslik
+                FROM Sinavlar s
+                JOIN Dersler d ON s.ders_id = d.ders_id
+                LEFT JOIN OgretimUyeleri ou ON d.hoca_id = ou.hoca_id
+                LEFT JOIN SinavDerslikleri sd ON s.sinav_id = sd.sinav_id
+                LEFT JOIN Derslikler dl ON sd.derslik_id = dl.derslik_id
+                WHERE s.bolum_id = %s AND s.sinav_turu = %s
+                GROUP BY s.sinav_id, d.ders_adi, ou.ad_soyad, s.sinav_tarihi, s.sinav_saati
+                ORDER BY s.sinav_tarihi ASC, s.sinav_saati ASC
+            """, (self.user["bolum_id"], sinav_turu))
 
-                try:
-                    tarih_dt = datetime.strptime(tarih, "%d.%m.%Y")
-                except ValueError:
-                    tarih_dt = datetime.strptime(tarih, "%Y-%m-%d")
+            rows = cur.fetchall()
 
-                try:
-                    saat_dt = datetime.strptime(saat, "%H:%M")
-                except:
-                    saat_dt = datetime.strptime("00:00", "%H:%M")
+            if not rows:
+                QMessageBox.warning(self, "Uyarı", "Oluşturulmuş sınav programı yok!")
+                return
 
-                data.append([tarih_dt, saat_dt, ders_kodu, ders_adi, ogretim_elemani, sinif, derslik])
+            df = pd.DataFrame(rows, columns=["Tarih", "Saat", "Ders Adı", "Öğretim Elemanı", "Derslik"])
 
-            df = pd.DataFrame(data,
-                              columns=["Tarih", "Saat", "Ders Kodu", "Ders Adı", "Öğretim Elemanı", "Sınıf", "Derslik"])
-            df = df.sort_values(by=["Tarih", "Saat"]).reset_index(drop=True)
-
-            # --- Excel biçimlendirme ---
             wb = Workbook()
             ws = wb.active
-            ws.title = "Sınav Programı"
+            ws.title = f"{sinav_turu} Programı"
 
-            bolum_adi = self.user.get("bolum_adi", "Bölüm")
-            sinav_turu = self.cmb_type.currentText() if hasattr(self, "cmb_type") else "Sınav"
-            baslik = f"{bolum_adi.upper()} BÖLÜMÜ {sinav_turu.upper()} SINAV PROGRAMI"
+            turuncu_baslik = "F4B084"
+            turuncu_gun = "FCE4D6"
+            beyaz = "FFFFFF"
 
-            ws.merge_cells("A1:G1")
-            ws["A1"] = baslik
-            ws["A1"].font = Font(bold=True, size=14)
-            ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
-            ws["A1"].fill = PatternFill("solid", fgColor="F4B084")  # Turuncu Başlık
-
-            headers = ["Tarih", "Sınav Saati", "Ders Adı", "Öğretim Elemanı", "Sınıf", "Derslik"]
-            ws.append(headers)
-            header_fill = PatternFill("solid", fgColor="F4B084")
-            border_style = Border(
+            border = Border(
                 left=Side(style="thin"), right=Side(style="thin"),
                 top=Side(style="thin"), bottom=Side(style="thin")
             )
-            for col_idx, header in enumerate(headers, 1):
-                cell = ws.cell(row=2, column=col_idx)
+
+            # ---- Ana Başlık ----
+            ws.merge_cells("A1:E1")
+            ws["A1"] = f"{self.user['bolum_adi']} {sinav_turu.upper()} SINAV PROGRAMI"
+            ws["A1"].font = Font(bold=True, size=14)
+            ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+            ws["A1"].fill = PatternFill("solid", fgColor=turuncu_baslik)
+
+            # ---- Tablo Başlıkları ----
+            headers = ["Tarih", "Sınav Saati", "Ders Adı", "Öğretim Elemanı", "Derslik"]
+            ws.append(headers)
+
+            for c in range(1, 6):
+                cell = ws.cell(row=2, column=c)
                 cell.font = Font(bold=True)
-                cell.fill = header_fill
+                cell.fill = PatternFill("solid", fgColor=turuncu_baslik)
                 cell.alignment = Alignment(horizontal="center", vertical="center")
-                cell.border = border_style
+                cell.border = border
 
-            # Sütun genişlikleri
-            ws.column_dimensions[get_column_letter(1)].width = 15  # Tarih
-            ws.column_dimensions[get_column_letter(2)].width = 15  # Saat
-            ws.column_dimensions[get_column_letter(3)].width = 35  # Ders Adı
-            ws.column_dimensions[get_column_letter(4)].width = 25  # Hoca
-            ws.column_dimensions[get_column_letter(5)].width = 10  # Sınıf
-            ws.column_dimensions[get_column_letter(6)].width = 25  # Derslik
-
-            # --- Tarihe göre gruplama ---
-            current_row = 3
-            renk_index = 0
-            renkler = ["FFFFFF", "FFF2CC"]  # Beyaz, Açık Sarı
+            renk_sira = 0
+            satir = 3
 
             for tarih, grup in df.groupby("Tarih"):
-                first_row = current_row
-                tarih_str = tarih.strftime("%d.%m.%Y")
-                gun_rengi = PatternFill("solid", fgColor=renkler[renk_index % len(renkler)])
+                gun_rengi = PatternFill("solid", fgColor=(turuncu_gun if renk_sira % 2 == 0 else beyaz))
+                renk_sira += 1
+
+                first_row = satir
 
                 for _, row in grup.iterrows():
-                    ws.cell(row=current_row, column=2, value=row["Saat"].strftime("%H:%M"))
-                    ws.cell(row=current_row, column=3, value=row["Ders Adı"])
-                    ws.cell(row=current_row, column=4, value=row["Öğretim Elemanı"])
-                    ws.cell(row=current_row, column=5, value=row["Sınıf"])
-                    ws.cell(row=current_row, column=6, value=row["Derslik"])
+                    ws.cell(satir, 2, str(row["Saat"]))
+                    ws.cell(satir, 3, row["Ders Adı"])
+                    ws.cell(satir, 4, row["Öğretim Elemanı"])
+                    ws.cell(satir, 5, row["Derslik"])
 
-                    # Hücre biçimleri
-                    for col in range(2, 7):
-                        cell = ws.cell(row=current_row, column=col)
-                        cell.border = border_style
-                        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                    for c in range(2, 6):
+                        cell = ws.cell(row=satir, column=c)
                         cell.fill = gun_rengi
+                        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                        cell.border = border
 
-                    current_row += 1
+                    satir += 1
 
-                # Tarih hücresi
-                if current_row - 1 >= first_row:
-                    ws.merge_cells(start_row=first_row, start_column=1, end_row=current_row - 1, end_column=1)
-                date_cell = ws.cell(row=first_row, column=1)
-                date_cell.value = tarih_str
-                date_cell.alignment = Alignment(text_rotation=90, horizontal="center", vertical="center")
-                date_cell.border = border_style
+                ws.merge_cells(start_row=first_row, start_column=1, end_row=satir - 1, end_column=1)
+                date_cell = ws.cell(first_row, 1)
+                date_cell.value = tarih.strftime("%d.%m.%Y")
                 date_cell.font = Font(bold=True)
+                date_cell.border = border
                 date_cell.fill = gun_rengi
+                date_cell.alignment = Alignment(text_rotation=90, horizontal="center", vertical="center")
 
-                renk_index += 1
-
-            for r in range(1, ws.max_row + 1):
-                ws.row_dimensions[r].height = 20
+            # Otomatik genişlik
+            widths = [15, 15, 40, 30, 25]
+            for i, w in enumerate(widths, 1):
+                ws.column_dimensions[get_column_letter(i)].width = w
 
             wb.save(path)
-            cur.close()
-            conn.close()
-
-            QMessageBox.information(self, "Başarılı", f"📘 Öğretim elemanlı sınav programı kaydedildi:\n{path}")
+            QMessageBox.information(self, "Başarılı", f"✅ Excel kaydedildi:\n{path}")
 
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Excel çıktısı oluşturulamadı:\n{str(e)}")
+            QMessageBox.critical(self, "Hata", f"Hata oluştu:\n{str(e)}")
 
     def assign_exam_rooms(self):
-        """SinavDerslikleri tablosunu otomatik doldurur"""
+        """
+        Sınavları dersliklere atar - Birden fazla derslik gerekiyorsa böler
+        Öğrenci sayısına göre minimum derslik kullanımı sağlar
+        """
         try:
-            from datetime import datetime, timedelta
-
-            # --- Veritabanı bağlantısı (DÜZELTİLDİ) ---
             conn = Database.get_connection()
             cur = conn.cursor()
 
-            # 🔹 Aktif derslikleri çek (kapasiteye göre BÜYÜKTEN KÜÇÜĞE)
             cur.execute("""
                 SELECT derslik_id, derslik_adi, kapasite
                 FROM Derslikler
@@ -519,40 +765,43 @@ class ExamScheduler(QWidget):
                 ORDER BY kapasite DESC
             """, (self.user["bolum_id"],))
             derslikler = cur.fetchall()
+
             if not derslikler:
-                print("⚠️ Aktif derslik bulunamadı.")
-                cur.close();
+                QMessageBox.warning(self, "Uyarı", "Aktif derslik bulunamadı!")
+                cur.close()
                 conn.close()
                 return
 
-            # 🔹 Bölüme ait sınavları (planlanan türdeki) çek
             sinav_turu = self.cmb_type.currentText()
             cur.execute("""
-                SELECT s.sinav_id, s.ders_id, s.sinav_tarihi, s.sinav_saati
+                SELECT s.sinav_id, s.ders_id, s.sinav_tarihi, s.sinav_saati, d.ders_adi
                 FROM Sinavlar s
+                JOIN Dersler d ON s.ders_id = d.ders_id
                 WHERE s.bolum_id = %s AND s.durum = 'Planlandı' AND s.sinav_turu = %s
                 ORDER BY s.sinav_tarihi, s.sinav_saati
             """, (self.user["bolum_id"], sinav_turu))
             sinavlar = cur.fetchall()
+
             if not sinavlar:
-                print("⚠️ Henüz sınav bulunamadı.")
-                cur.close();
+                QMessageBox.warning(self, "Uyarı", "Henüz sınav bulunamadı!")
+                cur.close()
                 conn.close()
                 return
 
-            # 🔹 Öğrenci sayılarını al
             cur.execute("""
                 SELECT ders_id, COUNT(ogrenci_id) as ogrenci_sayisi
-                FROM ogrencidersleri
+                FROM OgrenciDersleri
                 GROUP BY ders_id
             """)
             ogrenci_sayilari = {r[0]: r[1] for r in cur.fetchall()}
 
-            # 🔹 Derslik program geçmişi
-            derslik_programi = {d[0]: {} for d in derslikler}  # {derslik_id: {tarih: [saat]}}
+            derslik_programi = {d[0]: {} for d in derslikler}
+            son_kullanilan_derslikler = {}
 
-            atanan = 0
-            for sinav_id, ders_id, tarih, saat in sinavlar:
+            toplam_atama = 0
+            uyari_listesi = []
+
+            for sinav_id, ders_id, tarih, saat, ders_adi in sinavlar:
                 if isinstance(saat, str):
                     saat_time = datetime.strptime(saat, "%H:%M").time()
                 else:
@@ -563,25 +812,37 @@ class ExamScheduler(QWidget):
                 else:
                     tarih_date = tarih
 
-                # Bu sınav için gereken kapasite
-                gereken_kapasite = ogrenci_sayilari.get(ders_id, 0)
+                ogrenci_sayisi = ogrenci_sayilari.get(ders_id, 0)
 
-                # Derslikleri dolaş
-                uygun_derslik_bulundu = False
-                for derslik_id, derslik_adi, kapasite in derslikler:
-                    if kapasite < gereken_kapasite:
-                        continue  # Bu derslik küçük, atla
+                if ogrenci_sayisi == 0:
+                    uyari_listesi.append(f"⚠️ {ders_adi}: Öğrenci bulunamadı, atlanıyor.")
+                    continue
 
-                    # O derslikte o gün sınav var mı kontrol et
-                    gunluk_program = derslik_programi.get(derslik_id, {}).get(tarih_date, [])
+                onceki_slot_derslikler = son_kullanilan_derslikler.get((tarih_date, saat_time), set())
 
-                    # Çakışma var mı? (Basit saat çakışması)
-                    if saat_time in gunluk_program:
-                        continue  # Bu slot dolu
+                gereken_derslikler = self._select_optimal_classrooms(
+                    derslikler=derslikler,
+                    ogrenci_sayisi=ogrenci_sayisi,
+                    tarih_date=tarih_date,
+                    saat_time=saat_time,
+                    derslik_programi=derslik_programi,
+                    onceki_slot_derslikler=onceki_slot_derslikler
+                )
 
-                    # Uygun derslik bulundu
-                    uygun_derslik_bulundu = True
+                if not gereken_derslikler:
+                    uyari_listesi.append(
+                        f"❌ {ders_adi} ({ogrenci_sayisi} öğrenci): "
+                        f"Uygun derslik bulunamadı! Tüm derslikler dolu veya kapasite yetersiz."
+                    )
+                    continue
+
+                atanan_derslik_adlari = []
+                toplam_atanan_kapasite = 0
+
+                for derslik_id, derslik_adi, kapasite in gereken_derslikler:
                     derslik_programi.setdefault(derslik_id, {}).setdefault(tarih_date, []).append(saat_time)
+
+                    son_kullanilan_derslikler.setdefault((tarih_date, saat_time), set()).add(derslik_id)
 
                     cur.execute("""
                         INSERT INTO SinavDerslikleri (sinav_id, derslik_id)
@@ -589,26 +850,83 @@ class ExamScheduler(QWidget):
                         ON CONFLICT DO NOTHING
                     """, (sinav_id, derslik_id))
 
-                    atanan += 1
-                    break  # Bu sınav için derslik atandı, sonraki sınava geç
+                    atanan_derslik_adlari.append(f"{derslik_adi}({kapasite})")
+                    toplam_atanan_kapasite += kapasite
+                    toplam_atama += 1
 
-                if not uygun_derslik_bulundu:
-                    # Hiçbir derslik uymadı (ya hepsi dolu ya da hepsi küçük)
-                    # En büyük dersliği ata (kapasite yetmese bile)
-                    en_buyuk_derslik = derslikler[0]
-                    cur.execute("""
-                        INSERT INTO SinavDerslikleri (sinav_id, derslik_id)
-                        VALUES (%s, %s)
-                        ON CONFLICT DO NOTHING
-                    """, (sinav_id, en_buyuk_derslik[0]))
-                    atanan += 1
-                    print(
-                        f"UYARI: {tarih_date} {saat_time} sınavı ({gereken_kapasite} kişi) için uygun derslik bulunamadı, en büyüğe atandı.")
+                derslik_str = " + ".join(atanan_derslik_adlari)
+
+                if toplam_atanan_kapasite < ogrenci_sayisi:
+                    uyari_listesi.append(
+                        f"⚠️ {ders_adi}: {ogrenci_sayisi} öğrenci, "
+                        f"atanan kapasite: {toplam_atanan_kapasite} → {derslik_str}"
+                    )
+                else:
+                    print(f"✅ {ders_adi}: {ogrenci_sayisi} öğrenci → {derslik_str}")
 
             conn.commit()
             cur.close()
             conn.close()
-            print(f"✅ {atanan} sınav-derslik ataması yapıldı.")
+
+            mesaj = f"✅ Toplam {toplam_atama} derslik ataması yapıldı."
+
+            if uyari_listesi:
+                mesaj += f"\n\n⚠️ {len(uyari_listesi)} uyarı:\n" + "\n".join(uyari_listesi[:5])
+                if len(uyari_listesi) > 5:
+                    mesaj += f"\n... ve {len(uyari_listesi) - 5} uyarı daha"
+
+            QMessageBox.information(self, "Derslik Atama Tamamlandı", mesaj)
 
         except Exception as e:
-            print(f"❌ Derslik atama hatası: {e}")
+            QMessageBox.critical(self, "Hata", f"Derslik atama hatası: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
+    def _select_optimal_classrooms(self, derslikler, ogrenci_sayisi, tarih_date,
+                                   saat_time, derslik_programi, onceki_slot_derslikler):
+        """
+        Verilen öğrenci sayısını karşılayacak minimum sayıda derslik seçer
+
+        Args:
+            derslikler: Tüm derslikler listesi (kapasite DESC sıralı)
+            ogrenci_sayisi: Dersi alan öğrenci sayısı
+            tarih_date: Sınav tarihi
+            saat_time: Sınav saati
+            derslik_programi: Mevcut derslik programı
+            onceki_slot_derslikler: Bir önceki slotta kullanılan derslikler
+
+        Returns:
+            List[Tuple]: Seçilen derslikler [(derslik_id, derslik_adi, kapasite), ...]
+        """
+
+        uygun_derslikler = []
+        for derslik_id, derslik_adi, kapasite in derslikler:
+            gunluk_program = derslik_programi.get(derslik_id, {}).get(tarih_date, [])
+
+            if saat_time in gunluk_program:
+                continue
+
+            if derslik_id in onceki_slot_derslikler:
+                continue
+
+            uygun_derslikler.append((derslik_id, derslik_adi, kapasite))
+
+        if not uygun_derslikler:
+            return []
+
+        secilen_derslikler = []
+        kalan_ogrenci = ogrenci_sayisi
+
+        for derslik in uygun_derslikler:
+            derslik_id, derslik_adi, kapasite = derslik
+            secilen_derslikler.append(derslik)
+            kalan_ogrenci -= kapasite
+
+            if kalan_ogrenci <= 0:
+                break
+
+        if kalan_ogrenci > 0:
+            print(f"⚠️ {ogrenci_sayisi} öğrenci için yeterli derslik yok. "
+                  f"Eksik kapasite: {kalan_ogrenci}")
+
+        return secilen_derslikler
