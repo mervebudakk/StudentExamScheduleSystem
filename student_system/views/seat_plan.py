@@ -78,7 +78,8 @@ class SeatPlanView(QWidget):
         self.pm = permission_manager
         self.current_exam_id = None
         self.current_room = None
-        self.rooms = []
+        self.rooms = []  # Seçili sınava ait tüm derslikleri tutar
+        self.students = []  # Seçili sınava giren tüm öğrencileri tutar
         self._build_ui()
         self._load_exams()
 
@@ -105,11 +106,11 @@ class SeatPlanView(QWidget):
         hl.addWidget(title);
         hl.addStretch()
 
-        self.btn_generate = QPushButton("⚙️ Plan Oluştur/Güncelle")
-        self.btn_generate.clicked.connect(self._generate_plan)
+        self.btn_generate = QPushButton("⚙️ Plan Oluştur/Güncelle (Tüm Derslikler)")
+        self.btn_generate.clicked.connect(self._generate_plan_for_all_rooms)
         self.btn_generate.setCursor(Qt.PointingHandCursor)
 
-        self.btn_pdf = QPushButton("⬇️ PDF İndir")
+        self.btn_pdf = QPushButton("⬇️ PDF İndir (Seçili Derslik)")
         self.btn_pdf.clicked.connect(self._export_pdf)
         self.btn_pdf.setCursor(Qt.PointingHandCursor)
 
@@ -129,14 +130,10 @@ class SeatPlanView(QWidget):
         self.cmb_exam = QComboBox()
         self.cmb_exam.currentIndexChanged.connect(self._on_exam_changed)
 
-        self.cmb_room = QComboBox()
-        self.cmb_room.currentIndexChanged.connect(self._on_room_changed)
-
+        # Derslik seçimi combobox'ı kaldırıldı, artık tablo üzerinden yönetilecek.
+        # Sadece sınav seçimi yeterli.
         tl.addWidget(QLabel("Sınav:"));
-        tl.addWidget(self.cmb_exam, 4)
-        tl.addSpacing(10)
-        tl.addWidget(QLabel("Derslik:"));
-        tl.addWidget(self.cmb_room, 3)
+        tl.addWidget(self.cmb_exam, 1)
         root.addWidget(toolbar)
 
         # Sınav-Derslik listesi (seçilen sınavın tüm salonları)
@@ -145,13 +142,17 @@ class SeatPlanView(QWidget):
         tv = QVBoxLayout(table_wrap);
         tv.setContentsMargins(10, 10, 10, 10)
 
+        self.lbl_room_info = QLabel("Sınava Atanan Derslikler")
+        self.lbl_room_info.setStyleSheet("font-size:14px; font-weight:700; color:#2c3e50; padding: 5px;")
+        tv.addWidget(self.lbl_room_info)
+
         self.tbl_rooms = QTableWidget(0, 4)
         self.tbl_rooms.setHorizontalHeaderLabels(["Derslik", "Kapasite", "Enine×Boyuna×Yapı", "Atanan Öğrenci"])
         self.tbl_rooms.horizontalHeader().setStretchLastSection(True)
         self.tbl_rooms.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tbl_rooms.setEditTriggers(self.tbl_rooms.NoEditTriggers)
         self.tbl_rooms.setSelectionBehavior(self.tbl_rooms.SelectRows)
-        self.tbl_rooms.itemSelectionChanged.connect(self._on_table_select)
+        self.tbl_rooms.itemSelectionChanged.connect(self._on_table_select)  # Tablodan seçince önizleme değişir
 
         tv.addWidget(self.tbl_rooms)
         root.addWidget(table_wrap)
@@ -163,37 +164,29 @@ class SeatPlanView(QWidget):
         pv.setContentsMargins(12, 12, 12, 12);
         pv.setSpacing(10)
 
-        self.preview_title = QLabel("Önizleme")
+        self.preview_title = QLabel("Derslik Oturum Önizlemesi (Görselleştirmek için tablodan seçin)")
         self.preview_title.setStyleSheet("font-size:14px; font-weight:700; color:#2c3e50;")
         pv.addWidget(self.preview_title)
 
-        self.preview = SeatMapWidget(enine=6, boyuna=10, yapi=3, kapasite=180)  # varsayılan; seçimde güncellenecek
+        self.preview = SeatMapWidget(enine=6, boyuna=10, yapi=3, kapasite=180)  # varsayılan
         pv.addWidget(self.preview)
         root.addWidget(preview_wrap)
 
     # ---------- Data ----------
     def _load_exams(self):
-        # Admin ise tüm sınavlar, değilse kendi bölümüne göre
+        """Sınavları ComboBox'a yükler."""
         if self.pm.can_manage_all_departments():
             rows = Database.execute_query("""
-                SELECT s.sinav_id,
-                       s.sinav_tarihi,
-                       s.sinav_saati,
-                       s.sinav_turu,
-                       d.ders_kodu,
-                       d.ders_adi
+                SELECT s.sinav_id, s.sinav_tarihi, s.sinav_saati, s.sinav_turu,
+                       d.ders_kodu, d.ders_adi
                 FROM sinavlar s
                 JOIN dersler d ON d.ders_id = s.ders_id
                 ORDER BY s.sinav_tarihi, s.sinav_saati
             """)
         else:
             rows = Database.execute_query("""
-                SELECT s.sinav_id,
-                       s.sinav_tarihi,
-                       s.sinav_saati,
-                       s.sinav_turu,
-                       d.ders_kodu,
-                       d.ders_adi
+                SELECT s.sinav_id, s.sinav_tarihi, s.sinav_saati, s.sinav_turu,
+                       d.ders_kodu, d.ders_adi
                 FROM sinavlar s
                 JOIN dersler d ON d.ders_id = s.ders_id
                 WHERE s.bolum_id = %s
@@ -201,27 +194,24 @@ class SeatPlanView(QWidget):
             """, (self.user["bolum_id"],))
 
         self.cmb_exam.clear()
+        self.cmb_exam.addItem("Lütfen bir sınav seçin...", None)
         for r in rows or []:
-            # ekranda gösterilecek etiket
             saat_str = r["sinav_saati"].strftime('%H:%M') if r["sinav_saati"] else "--:--"
             tarih_str = r["sinav_tarihi"].strftime('%d.%m.%Y') if r["sinav_tarihi"] else "---"
             label = f"{r['ders_kodu']} – {r['ders_adi']} ({r['sinav_turu']}) — {tarih_str} {saat_str}"
             self.cmb_exam.addItem(label, r["sinav_id"])
 
         if rows:
-            self._on_exam_changed(0)
+            self.cmb_exam.setCurrentIndex(0)  # "Lütfen seçin" ekranında kal
 
     def _on_exam_changed(self, _):
+        """Sınav seçildiğinde, o sınava ait derslikleri ve öğrencileri yükler."""
         self.current_exam_id = self.cmb_exam.currentData()
-        self._load_rooms_for_exam()
-
-    def _load_rooms_for_exam(self):
         if not self.current_exam_id:
-            self.rooms = []
-            self.cmb_room.clear()
-            self.tbl_rooms.setRowCount(0)
+            self._clear_selection()
             return
 
+        # 1. Sınava atanan derslikleri yükle
         self.rooms = Database.execute_query("""
             SELECT d.derslik_id, d.derslik_kodu, d.derslik_adi, d.kapasite,
                    d.enine_sira_sayisi, d.boyuna_sira_sayisi, d.sira_yapisi,
@@ -236,12 +226,24 @@ class SeatPlanView(QWidget):
             ORDER BY d.derslik_kodu
         """, (self.current_exam_id,)) or []
 
-        # combobox
-        self.cmb_room.clear()
-        for r in self.rooms:
-            self.cmb_room.addItem(f"{r['derslik_kodu']} (Kapasite: {r['kapasite']})", r)  # data=r
+        # 2. Sınava giren öğrencileri yükle
+        self.students = Database.execute_query("""
+            SELECT o.ogrenci_id
+            FROM ogrencidersleri od
+            JOIN sinavlar s ON s.ders_id = od.ders_id AND s.sinav_id = %s
+            JOIN ogrenciler o ON o.ogrenci_id = od.ogrenci_id
+            ORDER BY o.ogrenci_no
+        """, (self.current_exam_id,)) or []
 
-        # tablo
+        # 3. Toplam bilgileri etikete yaz
+        total_capacity = sum(r['kapasite'] for r in self.rooms)
+        self.lbl_room_info.setText(
+            f"Sınava Atanan Derslikler ({len(self.rooms)} derslik) | "
+            f"Toplam Öğrenci: {len(self.students)} | "
+            f"Toplam Kapasite: {total_capacity}"
+        )
+
+        # 4. Derslik tablosunu doldur
         self.tbl_rooms.setRowCount(0)
         for r in self.rooms:
             row = self.tbl_rooms.rowCount();
@@ -252,55 +254,72 @@ class SeatPlanView(QWidget):
                 row, 2,
                 QTableWidgetItem(f"{r['enine_sira_sayisi']}×{r['boyuna_sira_sayisi']} × {r['sira_yapisi']}'li")
             )
-            self.tbl_rooms.setItem(row, 3, QTableWidgetItem(str(r['atanan'])))
+            atanan_item = QTableWidgetItem(str(r['atanan']))
+            if r['atanan'] == 0:
+                atanan_item.setForeground(Qt.red)
+            elif r['atanan'] < r['kapasite']:
+                atanan_item.setForeground(Qt.blue)
+            else:
+                atanan_item.setForeground(Qt.darkGreen)
+            self.tbl_rooms.setItem(row, 3, atanan_item)
 
         if self.rooms:
-            self._on_room_changed(0)  # İlk dersliği seç
+            self.tbl_rooms.selectRow(0)  # İlk dersliği seç
+            self._on_table_select()
         else:
-            self.current_room = None
-            self._apply_preview(None)  # Önizlemeyi temizle
+            self._clear_selection()
+
+    def _clear_selection(self):
+        """Ekranı temizler."""
+        self.current_exam_id = None
+        self.rooms = []
+        self.students = []
+        self.tbl_rooms.setRowCount(0)
+        self.lbl_room_info.setText("Sınava Atanan Derslikler")
+        self._apply_preview(None)
 
     def _on_table_select(self):
-        r = self.tbl_rooms.currentRow()
-        if r < 0 or r >= len(self.rooms): return
-        data = self.rooms[r]
-        # ComboBox'ı da senkronize et
-        for i in range(self.cmb_room.count()):
-            if self.cmb_room.itemData(i)['derslik_id'] == data['derslik_id']:
-                self.cmb_room.setCurrentIndex(i)
-                break
+        """Tablodan bir derslik seçildiğinde önizlemeyi günceller."""
+        selected_rows = self.tbl_rooms.selectionModel().selectedRows()
+        if not selected_rows:
+            self.current_room = None
+            self._apply_preview(None)
+            return
+
+        selected_row_index = selected_rows[0].row()
+        if selected_row_index < 0 or selected_row_index >= len(self.rooms):
+            return
+
+        data = self.rooms[selected_row_index]
         self._apply_preview(data)
 
-    def _on_room_changed(self, _):
-        data = self.cmb_room.currentData()
-        if data:
-            self._apply_preview(data)
-
     def _apply_preview(self, data):
+        """Önizleme widget'ını seçilen derslik verisiyle günceller."""
         self.current_room = data
 
-        # Eski widget'ı değiştir (önceki hatayı önlemek için)
+        # Eski widget'ı güvenle kaldır
         if hasattr(self, 'preview') and self.preview:
             parent = self.preview.parent()
-            if parent:
+            if parent and parent.layout():
                 parent.layout().removeWidget(self.preview)
             self.preview.deleteLater()
+            self.preview = None
 
         if data is None:
-            self.preview_title.setText("Önizleme (Derslik seçilmedi)")
+            self.preview_title.setText("Derslik Oturum Önizlemesi (Görselleştirmek için tablodan seçin)")
             self.preview = SeatMapWidget(enine=1, boyuna=1, yapi=1, kapasite=0)
         else:
             enine = int(data['enine_sira_sayisi'])
             yapi = int(data['sira_yapisi'])
             kapasite = int(data['kapasite'])
 
-            # PDF kuralına göre efektif satır sayısı
+            # Kapasiteye göre gereken satır sayısı
             seats_per_row = enine * yapi
             rows_needed = max(1, math.ceil(kapasite / seats_per_row))
 
             self.preview_title.setText(
-                f"Önizleme — {data['derslik_kodu']} ({kapasite})  "
-                f"Oturma Düzeni: {rows_needed} satır × {enine} sıra grubu, {yapi}'li"
+                f"Önizleme — {data['derslik_kodu']} (Kapasite: {kapasite}) | "
+                f"Düzen: {rows_needed} satır × {enine} grup × {yapi}'li"
             )
             self.preview = SeatMapWidget(
                 enine=enine,
@@ -313,65 +332,87 @@ class SeatPlanView(QWidget):
         self.preview_title.parent().layout().addWidget(self.preview)
 
     # ---------- Actions ----------
-    def _generate_plan(self):
-        if not self.current_exam_id or not self.current_room:
-            QMessageBox.warning(self, "Uyarı", "Lütfen sınav ve derslik seçiniz.")
+    def _generate_plan_for_all_rooms(self):
+        """
+        [YENİ] Seçili sınav için TÜM dersliklere öğrencileri dağıtır.
+        """
+        # --- KISIT KONTROLÜ 1: Sınav seçili mi? ---
+        if not self.current_exam_id:
+            QMessageBox.warning(self, "Uyarı", "Lütfen bir sınav seçiniz.")
             return
+
+        sinav_id = self.current_exam_id
+        ogrenciler = self.students
+        derslikler = self.rooms
+
+        if not ogrenciler:
+            QMessageBox.warning(self, "Uyarı", "Bu sınava kayıtlı öğrenci bulunamadı.")
+            return
+
+        if not derslikler:
+            QMessageBox.warning(self, "Hata",
+                                "Bu sınav için hiç derslik atanmamış. Önce 'Sınav Programı' ekranından derslik ataması yapın.")
+            return
+
+        # --- KISIT KONTROLÜ 2: Toplam kapasite yeterli mi? ---
+        total_capacity = sum(r['kapasite'] for r in derslikler)
+        total_students = len(ogrenciler)
+
+        if total_students > total_capacity:
+            QMessageBox.critical(
+                self,
+                "Hata: Kapasite Yetersiz!",
+                f"Bu sınav için kapasite yetersiz! \n\n"
+                f"Sınava Giren Öğrenci: {total_students}\n"
+                f"Toplam Derslik Kapasitesi: {total_capacity}\n"
+                f"Gereken Fark: {total_students - total_capacity}\n\n"
+                f"Planlama yapılamadı. Lütfen daha fazla derslik ekleyin."
+            )
+            return
+
         try:
-            # 1. Gerekli bilgileri al
-            sinav_id = self.current_exam_id
-            room = self.current_room
-            derslik_id = room["derslik_id"]
-
-            # 2. Sınava giren öğrencileri çek
-            ogrenciler = Database.execute_query("""
-                SELECT o.ogrenci_id
-                FROM ogrencidersleri od
-                JOIN sinavlar s ON s.ders_id = od.ders_id AND s.sinav_id = %s
-                JOIN ogrenciler o ON o.ogrenci_id = od.ogrenci_id
-                ORDER BY o.ogrenci_no
-            """, (sinav_id,))
-
-            if not ogrenciler:
-                QMessageBox.warning(self, "Uyarı", "Bu sınava kayıtlı öğrenci bulunamadı.")
-                return
-
-            # 3. Derslik bilgilerini al
-            enine = int(room['enine_sira_sayisi'])  # Sütun (masa) sayısı
-            boyuna = int(room['boyuna_sira_sayisi'])  # Satır (masa) sayısı
-            yapi = int(room['sira_yapisi'])  # Bir masadaki koltuk sayısı
-            kapasite = int(room['kapasite'])
-
-            # 4. Eski planı temizle (Sadece bu sınav ve bu derslik için)
+            # 1. Eski planı temizle (Sadece bu sınav için)
             Database.execute_non_query(
-                "DELETE FROM oturmaplani WHERE sinav_id = %s AND derslik_id = %s",
-                (sinav_id, derslik_id)
+                "DELETE FROM oturmaplani WHERE sinav_id = %s",
+                (sinav_id,)
             )
 
-            # 5. Yeni planı oluştur (Toplu insert için liste)
+            # 2. Öğrencileri tüm dersliklere dağıt
             plan_values = []
             ogr_index = 0
 
-            for r in range(1, boyuna + 1):  # Satırlar (boyuna)
-                for c in range(1, enine + 1):  # Sütunlar (enine)
-                    for k in range(1, yapi + 1):  # Masadaki koltuklar (yapi)
+            for room in derslikler:
+                derslik_id = room["derslik_id"]
+                enine = int(room['enine_sira_sayisi'])
+                boyuna = int(room['boyuna_sira_sayisi'])
+                yapi = int(room['sira_yapisi'])
+                kapasite = int(room['kapasite'])
 
-                        # Öğrenci bittiyse veya derslik kapasitesi dolduysa dur
-                        if ogr_index >= len(ogrenciler) or len(plan_values) >= kapasite:
-                            break
+                placed_in_this_room = 0
 
-                        ogrenci_id = ogrenciler[ogr_index]['ogrenci_id']
+                for r in range(1, boyuna + 1):
+                    for c in range(1, enine + 1):
+                        for k in range(1, yapi + 1):
 
-                        # (sinav_id, ogrenci_id, derslik_id, sira_no, sutun_no, koltuk_no)
-                        plan_values.append(
-                            (sinav_id, ogrenci_id, derslik_id, r, c, k)
-                        )
-                        ogr_index += 1
+                            # Öğrenci bittiyse VEYA bu derslik kapasitesi dolduysa dur
+                            if ogr_index >= total_students or placed_in_this_room >= kapasite:
+                                break
 
-                    if ogr_index >= len(ogrenciler) or len(plan_values) >= kapasite: break
-                if ogr_index >= len(ogrenciler) or len(plan_values) >= kapasite: break
+                            ogrenci_id = ogrenciler[ogr_index]['ogrenci_id']
 
-            # 6. Veritabanına toplu kayıt
+                            plan_values.append(
+                                (sinav_id, ogrenci_id, derslik_id, r, c, k)
+                            )
+                            ogr_index += 1
+                            placed_in_this_room += 1
+
+                        if ogr_index >= total_students or placed_in_this_room >= kapasite: break
+                    if ogr_index >= total_students or placed_in_this_room >= kapasite: break
+
+                if ogr_index >= total_students:
+                    break  # Tüm öğrenciler yerleşti, ana döngüden çık
+
+            # 3. Veritabanına toplu kayıt
             if plan_values:
                 Database.execute_many("""
                     INSERT INTO oturmaplani (sinav_id, ogrenci_id, derslik_id, sira_no, sutun_no, koltuk_no)
@@ -379,16 +420,36 @@ class SeatPlanView(QWidget):
                     ON CONFLICT (sinav_id, ogrenci_id) DO NOTHING
                 """, plan_values)
 
-            QMessageBox.information(self, "Başarılı", f"{len(plan_values)} öğrenci bu dersliğe yerleştirildi.")
-            self._load_rooms_for_exam()  # Tabloyu yenile
+            # --- KISIT KONTROLÜ 3: Tüm öğrenciler yerleşti mi? ---
+            if ogr_index < total_students:
+                QMessageBox.warning(
+                    self,
+                    "Uyarı: Kısmi Yerleştirme",
+                    f"Tüm derslikler dolsa da öğrenciler açıkta kaldı! [cite: 178, 181]\n\n"
+                    f"Toplam Öğrenci: {total_students}\n"
+                    f"Yerleştirilen Öğrenci: {ogr_index}\n"
+                    f"Açıkta Kalan: {total_students - ogr_index}\n\n"
+                    f"Bunun nedeni (Enine*Boyuna*Yapı) düzeninin kapasiteden küçük olması olabilir."
+                )
+            else:
+                QMessageBox.information(self, "Başarılı",
+                                        f"Tüm dersliklere toplam {ogr_index} öğrenci başarıyla yerleştirildi.")
+
+            # Ekranı (tabloyu) yenile
+            self._on_exam_changed(self.cmb_exam.currentIndex())
 
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Plan oluşturulurken hata:\n{e}")
 
     def _export_pdf(self):
+        """[GÜNCELLENDİ] Sadece tablodan seçili olan derslik için PDF alır."""
+
+        # --- KISIT KONTROLÜ 1: Derslik seçili mi? ---
         if not self.current_exam_id or not self.current_room:
-            QMessageBox.warning(self, "Uyarı", "Lütfen sınav ve derslik seçiniz.")
+            QMessageBox.warning(self, "Uyarı", "Lütfen PDF'ini almak için tablodan bir derslik seçiniz.")
             return
+
+        derslik_id = self.current_room["derslik_id"]
 
         try:
             # 1. Kayıt yeri seç
@@ -402,7 +463,7 @@ class SeatPlanView(QWidget):
                 return
 
             # 2. Başlık bilgileri
-            header = Database.execute_query("""
+            header_sql = """
                 SELECT 
                     s.sinav_tarihi, s.sinav_saati, s.sinav_turu,
                     d.ders_kodu, d.ders_adi,
@@ -411,14 +472,15 @@ class SeatPlanView(QWidget):
                 JOIN dersler d    ON d.ders_id = s.ders_id
                 JOIN derslikler dl ON dl.derslik_id = %s
                 WHERE s.sinav_id = %s
-            """, (self.current_room["derslik_id"], self.current_exam_id))
+            """
+            header = Database.execute_query(header_sql, (derslik_id, self.current_exam_id))
             if not header:
-                QMessageBox.warning(self, "Uyarı", "Başlık bilgileri bulunamadı.");
+                QMessageBox.warning(self, "Uyarı", "Sınav başlık bilgileri bulunamadı.");
                 return
             h = header[0]
 
             # 3. Oturma planı listesi
-            rows = Database.execute_query("""
+            rows_sql = """
                 SELECT op.sira_no, op.sutun_no, op.koltuk_no,
                        o.ogrenci_no,
                        o.ad_soyad
@@ -426,12 +488,22 @@ class SeatPlanView(QWidget):
                 JOIN ogrenciler o ON o.ogrenci_id = op.ogrenci_id
                 WHERE op.sinav_id = %s AND op.derslik_id = %s
                 ORDER BY op.sira_no, op.sutun_no, op.koltuk_no
-            """, (self.current_exam_id, self.current_room["derslik_id"])) or []
+            """
+            rows = Database.execute_query(rows_sql, (self.current_exam_id, derslik_id)) or []
+
+            # --- KISIT KONTROLÜ 2: Plana atanmış öğrenci var mı? ---
+            if not rows:
+                QMessageBox.warning(
+                    self,
+                    "Uyarı: Plan Boş",
+                    f"'{h['derslik_kodu']}' dersliği için oluşturulmuş bir oturma planı (veya atanmış öğrenci) bulunamadı.\n\n"
+                    "Lütfen önce 'Plan Oluştur/Güncelle' butonuna basın."
+                )
+                return
 
             # 4. PDF Oluşturma
             doc = SimpleDocTemplate(path, pagesize=A4, topMargin=2 * cm, bottomMargin=2 * cm)
             story = []
-            styles = getSampleStyleSheet()
 
             # Başlık
             story.append(Paragraph("SINAV OTURMA PLANI", styles['Baslik']))
@@ -442,15 +514,12 @@ class SeatPlanView(QWidget):
             saat_str = h["sinav_saati"].strftime('%H:%M') if h["sinav_saati"] else "--:--"
             tarih_str = h["sinav_tarihi"].strftime('%d.%m.%Y') if h["sinav_tarihi"] else "---"
             story.append(Paragraph(f"<b>Tarih / Saat:</b> {tarih_str} / {saat_str}", styles['AltBaslik']))
-
-            # Ayraç
             story.append(Paragraph("<hr/>", styles['Normal']))
 
             # Tablo Verisi
             data = [
                 ["Sıra", "Sütun (Masa)", "Koltuk", "Öğrenci No", "Ad Soyad"]
             ]
-
             style_tablo_ici = styles['TabloIci']
 
             for r in rows:
@@ -462,37 +531,28 @@ class SeatPlanView(QWidget):
                     Paragraph(r['ad_soyad'], style_tablo_ici)
                 ])
 
-            if len(data) == 1:
-                story.append(Paragraph("Bu dersliğe atanmış öğrenci bulunamadı.", styles['AltBaslik']))
-            else:
-                # Tablo Stili
-                ts = TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#27ae60")),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Verdana' if font_registered else 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, 0), 10),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                    ('TOPPADDING', (0, 0), (-1, 0), 8),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                    ('BACKGROUND', (0, 1), (-1, -1), colors.whitesmoke, 0, (0, -1)),  # (Satır indeksi % 2 == 0)
-                    ('BACKGROUND', (0, 2), (-1, -1), colors.white, 0, (1, -1)),  # (Satır indeksi % 2 == 1)
-                ])
+            # Tablo Stili
+            ts = TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#27ae60")),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Verdana' if font_registered else 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                ('TOPPADDING', (0, 0), (-1, 0), 8),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ])
+            for i in range(1, len(data)):
+                if i % 2 == 0:
+                    ts.add('BACKGROUND', (0, i), (-1, i), colors.HexColor("#F0F0F0"))
+                else:
+                    ts.add('BACKGROUND', (0, i), (-1, i), colors.white)
 
-                # Alternatif satır renkleri için döngü
-                for i in range(1, len(data)):
-                    if i % 2 == 0:
-                        ts.add('BACKGROUND', (0, i), (-1, i), colors.HexColor("#F0F0F0"))
-                    else:
-                        ts.add('BACKGROUND', (0, i), (-1, i), colors.white)
+            table = Table(data, colWidths=[2 * cm, 2.5 * cm, 2 * cm, 3 * cm, 6.5 * cm])
+            table.setStyle(ts)
+            story.append(table)
 
-                # Tabloyu oluştur
-                table = Table(data, colWidths=[2 * cm, 2.5 * cm, 2 * cm, 3 * cm, 6.5 * cm])
-                table.setStyle(ts)
-                story.append(table)
-
-            # PDF'i oluştur
             doc.build(story)
             QMessageBox.information(self, "Başarılı", f"PDF başarıyla kaydedildi:\n{path}")
 
