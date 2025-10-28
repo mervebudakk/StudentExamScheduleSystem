@@ -42,10 +42,12 @@ class ClassroomManagement(QWidget):
                 border-radius: 12px;
             }
         """)
-        hl = QHBoxLayout(header); hl.setContentsMargins(18, 14, 18, 14)
+        hl = QHBoxLayout(header);
+        hl.setContentsMargins(18, 14, 18, 14)
         title = QLabel("🏫  Derslik Yönetimi")
         title.setStyleSheet("color:white; font-size:20px; font-weight:700;")
-        hl.addWidget(title); hl.addStretch()
+        hl.addWidget(title);
+        hl.addStretch()
 
         btn_new_top = QPushButton("➕ Yeni Derslik Ekle")
         btn_new_top.clicked.connect(self._start_create)
@@ -82,7 +84,8 @@ class ClassroomManagement(QWidget):
         """)
         toolbar = QHBoxLayout(toolbar_frame)
         toolbar.setContentsMargins(14, 12, 14, 12)
-        self.search = QLineEdit(); self.search.setPlaceholderText("Kod/Ad ara…")
+        self.search = QLineEdit();
+        self.search.setPlaceholderText("Kod/Ad ara…")
         self.search.textChanged.connect(self._load_table)
 
         self.filter_dept = QComboBox()
@@ -134,7 +137,8 @@ class ClassroomManagement(QWidget):
             }
             QToolButton:hover { color:#8e44ad; }
         """)
-        tv = QVBoxLayout(table_frame); tv.setContentsMargins(10, 10, 10, 10)
+        tv = QVBoxLayout(table_frame);
+        tv.setContentsMargins(10, 10, 10, 10)
         self.table = QTableWidget(0, 8)
         self.table.setAlternatingRowColors(True)
         self.table.setHorizontalHeaderLabels(
@@ -150,7 +154,8 @@ class ClassroomManagement(QWidget):
         root.addWidget(table_frame)
 
         # Form kartı
-        self.form_box = QFrame(); self.form_box.setVisible(False)
+        self.form_box = QFrame();
+        self.form_box.setVisible(False)
         self.form_box.setStyleSheet("""
             QFrame { background:white; border:2px solid #ecf0f1; border-radius:12px; }
             QLineEdit, QSpinBox, QComboBox {
@@ -158,16 +163,22 @@ class ClassroomManagement(QWidget):
                 background:white;
             }
         """)
-        fl = QFormLayout(self.form_box); fl.setLabelAlignment(Qt.AlignRight)
+        fl = QFormLayout(self.form_box);
+        fl.setLabelAlignment(Qt.AlignRight)
         fl.setContentsMargins(14, 12, 14, 12)
 
         self.inp_code = QLineEdit()
         self.inp_name = QLineEdit()
-        self.inp_capacity = QSpinBox(); self.inp_capacity.setRange(1, 5000)
-        self.inp_enine = QSpinBox(); self.inp_enine.setRange(1, 200)
-        self.inp_boyuna = QSpinBox(); self.inp_boyuna.setRange(1, 200)
-        self.inp_yapi = QSpinBox(); self.inp_yapi.setRange(2, 4)
-        self.inp_dept = QComboBox(); self._fill_dept_combo(self.inp_dept, include_all=False)
+        self.inp_capacity = QSpinBox();
+        self.inp_capacity.setRange(1, 5000)
+        self.inp_enine = QSpinBox();
+        self.inp_enine.setRange(1, 200)
+        self.inp_boyuna = QSpinBox();
+        self.inp_boyuna.setRange(1, 200)
+        self.inp_yapi = QSpinBox();
+        self.inp_yapi.setRange(2, 4)
+        self.inp_dept = QComboBox();
+        self._fill_dept_combo(self.inp_dept, include_all=False)
         if not self.pm.can_manage_all_departments():
             self._select_dept(self.inp_dept, self.user["bolum_id"])
             self.inp_dept.setDisabled(True)
@@ -183,7 +194,8 @@ class ClassroomManagement(QWidget):
 
         # Alt butonlar
         btns = QHBoxLayout()
-        self.btn_save = QPushButton("✅ Kaydet"); self.btn_save.clicked.connect(self._save)
+        self.btn_save = QPushButton("✅ Kaydet");
+        self.btn_save.clicked.connect(self._save)
         self.btn_save.setCursor(Qt.PointingHandCursor)
         self.btn_save.setStyleSheet("""
             QPushButton {
@@ -198,7 +210,8 @@ class ClassroomManagement(QWidget):
             }
         """)
 
-        self.btn_cancel = QPushButton("↩️ Vazgeç"); self.btn_cancel.clicked.connect(self._cancel_form)
+        self.btn_cancel = QPushButton("↩️ Vazgeç");
+        self.btn_cancel.clicked.connect(self._cancel_form)
         self.btn_cancel.setCursor(Qt.PointingHandCursor)
         self.btn_cancel.setStyleSheet("""
             QPushButton {
@@ -213,8 +226,10 @@ class ClassroomManagement(QWidget):
         btn_new_bottom.setCursor(Qt.PointingHandCursor)
         btn_new_bottom.setStyleSheet(btn_new_top.styleSheet())
 
-        btns.addWidget(self.btn_save); btns.addWidget(self.btn_cancel)
-        btns.addStretch(); btns.addWidget(btn_new_bottom)
+        btns.addWidget(self.btn_save);
+        btns.addWidget(self.btn_cancel)
+        btns.addStretch();
+        btns.addWidget(btn_new_bottom)
         root.addLayout(btns)
 
     # ---------- Data ----------
@@ -236,7 +251,8 @@ class ClassroomManagement(QWidget):
     def _select_dept(self, combo: QComboBox, dept_id):
         for i in range(combo.count()):
             if combo.itemData(i) == dept_id:
-                combo.setCurrentIndex(i); break
+                combo.setCurrentIndex(i);
+                break
 
     def _load_table(self):
         q = (self.search.text() or "").strip().lower()
@@ -250,12 +266,15 @@ class ClassroomManagement(QWidget):
                 params += [int(q), f"%{q}%"]
             else:
                 where.append("(LOWER(derslik_kodu) LIKE %s OR LOWER(derslik_adi) LIKE %s)")
-                like = f"%{q}%"; params += [like, like]
+                like = f"%{q}%";
+                params += [like, like]
 
         if dept_id:
-            where.append("bolum_id = %s"); params.append(dept_id)
+            where.append("bolum_id = %s");
+            params.append(dept_id)
         elif not self.pm.can_manage_all_departments():
-            where.append("bolum_id = %s"); params.append(self.user["bolum_id"])
+            where.append("bolum_id = %s");
+            params.append(self.user["bolum_id"])
 
         # NOT: 'aktif' filtresi tamamen kaldırıldı
         sql = """
@@ -270,7 +289,8 @@ class ClassroomManagement(QWidget):
 
         self.table.setRowCount(0)
         for r in rows:
-            row = self.table.rowCount(); self.table.insertRow(row)
+            row = self.table.rowCount();
+            self.table.insertRow(row)
 
             self.table.setItem(row, 0, QTableWidgetItem(r["derslik_kodu"]))
             self.table.setItem(row, 1, QTableWidgetItem(r["derslik_adi"] or ""))
@@ -326,7 +346,8 @@ class ClassroomManagement(QWidget):
                FROM Derslikler WHERE derslik_id=%s""", (derslik_id,)
         )
         if not r:
-            QMessageBox.warning(self, "Bulunamadı", "Kayıt bulunamadı."); return
+            QMessageBox.warning(self, "Bulunamadı", "Kayıt bulunamadı.");
+            return
 
         row = r[0]
         self.current_id = row["derslik_id"]
@@ -352,9 +373,12 @@ class ClassroomManagement(QWidget):
             self._clear_form_defaults()
 
     def _clear_form_defaults(self):
-        self.inp_code.clear(); self.inp_name.clear()
-        self.inp_capacity.setValue(30); self.inp_enine.setValue(7)
-        self.inp_boyuna.setValue(9); self.inp_yapi.setValue(3)
+        self.inp_code.clear();
+        self.inp_name.clear()
+        self.inp_capacity.setValue(30);
+        self.inp_enine.setValue(7)
+        self.inp_boyuna.setValue(9);
+        self.inp_yapi.setValue(3)
         if self.pm.can_manage_all_departments() and self.inp_dept.count() > 0:
             self.inp_dept.setCurrentIndex(0)
 
@@ -375,7 +399,8 @@ class ClassroomManagement(QWidget):
     def _save(self):
         ok, msg = self._validate()
         if not ok:
-            QMessageBox.warning(self, "Uyarı", msg); return
+            QMessageBox.warning(self, "Uyarı", msg);
+            return
 
         dept_id = self.inp_dept.currentData()
         if not self.pm.can_manage_all_departments():
@@ -411,15 +436,10 @@ class ClassroomManagement(QWidget):
                 int(self.inp_yapi.value()),
                 self.current_id
             ))
-            Database.execute_non_query("""
-                UPDATE Derslikler
-                SET kapasite = enine_sira_sayisi * boyuna_sira_sayisi * sira_yapisi
-                WHERE derslik_id = %s
-            """, (self.current_id if self.current_id is not None else
-                                                         Database.execute_query(
-                                                             "SELECT currval(pg_get_serial_sequence('derslikler','derslik_id')) AS id")[
-                                                             0]["id"],))
             QMessageBox.information(self, "Bilgi", "Derslik güncellendi.")
+
+        # <<<--- BURADAN HATALI KAPASİTE HESAPLAMA SORGUSU KALDIRILDI --->>>
+
         self._load_table()
 
     def _delete_by_id(self, derslik_id: int):
@@ -464,4 +484,3 @@ class ClassroomManagement(QWidget):
         lay.addWidget(panel)
 
         dlg.exec_()
-
