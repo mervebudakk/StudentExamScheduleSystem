@@ -9,7 +9,107 @@ from student_system.core.database import Database
 import traceback
 from student_system.core.permissions import PermissionManager
 from student_system.utils.helpers import show_error_message, show_warning_message, show_confirmation_dialog
+from PyQt5.QtWidgets import QDialog, QFormLayout, QLineEdit
+from student_system.utils.helpers import show_error_message, show_info_message
+import bcrypt
 
+
+class ProfileSettingsDialog(QDialog):
+    def __init__(self, user_id, parent=None):
+        super().__init__(parent)
+        self.user_id = user_id
+
+        self.setWindowTitle("Profil ve Şifre Güncelleme")
+        self.setMinimumWidth(400)
+        self.setStyleSheet("""
+            QDialog { background-color: #f5f7fa; }
+            QLabel { font-size: 14px; }
+            QLineEdit { 
+                padding: 10px; border: 1px solid #ddd; border-radius: 5px; 
+                font-size: 14px; 
+            }
+            QPushButton {
+                background-color: #27ae60; color: white; padding: 12px;
+                border-radius: 5px; font-size: 14px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #229954; }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(15)
+
+        title = QLabel("Şifre Değiştir")
+        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #2c3e50;")
+        layout.addWidget(title)
+
+        form_layout = QFormLayout()
+
+        self.current_pass_input = QLineEdit()
+        self.current_pass_input.setEchoMode(QLineEdit.Password)
+        form_layout.addRow("Mevcut Şifre:", self.current_pass_input)
+
+        self.new_pass_input = QLineEdit()
+        self.new_pass_input.setEchoMode(QLineEdit.Password)
+        form_layout.addRow("Yeni Şifre:", self.new_pass_input)
+
+        self.confirm_pass_input = QLineEdit()
+        self.confirm_pass_input.setEchoMode(QLineEdit.Password)
+        form_layout.addRow("Yeni Şifre (Tekrar):", self.confirm_pass_input)
+
+        layout.addLayout(form_layout)
+
+        self.save_button = QPushButton("Kaydet")
+        self.save_button.clicked.connect(self.save_password)
+        layout.addWidget(self.save_button)
+
+    def save_password(self):
+        current_pass = self.current_pass_input.text()
+        new_pass = self.new_pass_input.text()
+        confirm_pass = self.confirm_pass_input.text()
+
+        # 1. Doğrulamalar
+        if not current_pass or not new_pass or not confirm_pass:
+            show_error_message(self, "Hata", "Tüm alanlar doldurulmalıdır.")
+            return
+
+        if new_pass != confirm_pass:
+            show_error_message(self, "Hata", "Yeni şifreler uyuşmuyor.")
+            return
+
+        if len(new_pass) < 6:
+            show_error_message(self, "Hata", "Yeni şifre en az 6 karakter olmalıdır.")
+            return
+
+        try:
+            # 2. Mevcut şifreyi kontrol et
+            db_result = Database.execute_query(
+                "SELECT sifre_hash FROM kullanicilar WHERE kullanici_id = %s",
+                (self.user_id,)
+            )
+
+            if not db_result:
+                show_error_message(self, "Hata", "Kullanıcı bulunamadı.")
+                return
+
+            current_hash = db_result[0]['sifre_hash']
+
+            if not bcrypt.checkpw(current_pass.encode('utf-8'), current_hash.encode('utf-8')):
+                show_error_message(self, "Hata", "Mevcut şifreniz yanlış.")
+                return
+
+            # 3. Yeni şifreyi hash'le ve güncelle
+            new_hash = bcrypt.hashpw(new_pass.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+            Database.execute_non_query(
+                "UPDATE kullanicilar SET sifre_hash = %s WHERE kullanici_id = %s",
+                (new_hash, self.user_id)
+            )
+
+            show_info_message(self, "Başarılı", "Şifreniz başarıyla güncellendi.")
+            self.accept()  # Diyaloğu kapat
+
+        except Exception as e:
+            show_error_message(self, "Veritabanı Hatası", f"Bir hata oluştu: {e}")
 
 class MainDashboard(QMainWindow):
     def __init__(self, user):
@@ -141,7 +241,10 @@ class MainDashboard(QMainWindow):
             self.menu_buttons[item['text']] = btn
             layout.addWidget(btn)
 
-        layout.addStretch()
+        ### YENİ EKLENTİ: PROFİL BUTONU ###
+        self.profile_btn = self.create_menu_button('Profili Güncelle', '⚙️', self.open_profile_settings)
+        layout.addWidget(self.profile_btn)
+        ### YENİ EKLENTİ SONU ###
 
         logout_btn = self.create_menu_button('Çıkış', '🚪', self.logout)
         logout_btn.setStyleSheet(logout_btn.styleSheet() + """
@@ -150,7 +253,7 @@ class MainDashboard(QMainWindow):
             }
         """)
         layout.addWidget(logout_btn)
-
+        layout.addStretch()
         sidebar.setLayout(layout)
         return sidebar
 
@@ -730,6 +833,13 @@ class MainDashboard(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Oturma Planı",
                                  f"Ekran yüklenirken hata:\n\n{e}\n\n{traceback.format_exc()}")
+
+    ### YENİ EKLENTİ: PROFİL PENCERESİNİ AÇMA ###
+    def open_profile_settings(self):
+        # user['id']'yi diyaloga gönderiyoruz
+            dialog = ProfileSettingsDialog(self.user['id'], self)
+            dialog.exec_()
+        ### YENİ EKLENTİ SONU ###
 
     def logout(self):
         if show_confirmation_dialog(self, 'Çıkış', 'Çıkış yapmak istediğinize emin misiniz?'):

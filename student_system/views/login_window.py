@@ -7,8 +7,18 @@ from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QFont, QPalette, QColor
 from student_system.core.database import Database
 from PyQt5.QtWidgets import QSizePolicy, QCompleter
-from student_system.utils.helpers import show_error_message, is_valid_email
 
+# --- İMPORTLAR ---
+from student_system.utils.helpers import show_error_message, show_info_message, is_valid_email
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import random
+import string
+import bcrypt
+
+
+# --- İMPORTLAR SONU ---
 
 
 class LoginWindow(QMainWindow):
@@ -25,6 +35,10 @@ class LoginWindow(QMainWindow):
         # Pencere ayarları
         self.setWindowTitle('Sınav Takvimi Sistemi - Giriş')
 
+        ### DEĞİŞİKLİK 1: Pencere boyutu sabitlendiği için tam ekran olmuyordu. ###
+        # self.setFixedSize(550, 700) # <- BU SATIR KALDIRILDI
+        ### DEĞİŞİKLİK 1 SONU ###
+
         # Arka plan resmi ile gradient overlay
         import os
         banner_path = os.path.join(os.path.dirname(__file__), '..', '..', 'bannerkoumobil.png')
@@ -35,6 +49,7 @@ class LoginWindow(QMainWindow):
                 background-image: url({banner_path});
                 background-position: center;
                 background-repeat: no-repeat;
+                background-color: #27ae60; /* Resim yüklenmezse diye yedek renk */
             }}
             QMainWindow::before {{
                 content: "";
@@ -51,10 +66,12 @@ class LoginWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        # Ana layout
-        main_layout = QVBoxLayout()
+        ### DEĞİŞİKLİK 2: Ana layout Yatay (QHBoxLayout) olarak değiştirildi ###
+        # Bu, formu yatayda ortalamamızı sağlayacak.
+        main_layout = QHBoxLayout()
         main_layout.setContentsMargins(50, 50, 50, 50)
         main_layout.setSpacing(30)
+        ### DEĞİŞİKLİK 2 SONU ###
 
         # Yeşil overlay frame (saydam arka plan için)
         overlay = QFrame()
@@ -65,6 +82,10 @@ class LoginWindow(QMainWindow):
             }
         """)
 
+        ### DEĞİŞİKLİK 3: Formun genişlemesini önlemek için sabit genişlik verildi ###
+        overlay.setFixedWidth(500)  # Formun genişliği 500px ile sınırlandı
+        ### DEĞİŞİKLİK 3 SONU ###
+
         overlay_layout = QVBoxLayout()
         overlay_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -74,7 +95,6 @@ class LoginWindow(QMainWindow):
         # Form kartı
         form_card = self.create_form_card()
 
-
         # Overlay layout'a ekle
         overlay_layout.addStretch(1)
         overlay_layout.addWidget(logo_section)
@@ -83,8 +103,11 @@ class LoginWindow(QMainWindow):
 
         overlay.setLayout(overlay_layout)
 
-        # Ana layout'a overlay ekle
-        main_layout.addWidget(overlay)
+        ### DEĞİŞİKLİK 4: Formu yatayda ortalamak için sağa ve sola boşluk eklendi ###
+        main_layout.addStretch(1)
+        main_layout.addWidget(overlay)  # Form (overlay) ortada
+        main_layout.addStretch(1)
+        ### DEĞİŞİKLİK 4 SONU ###
 
         central_widget.setLayout(main_layout)
 
@@ -182,7 +205,7 @@ class LoginWindow(QMainWindow):
             if "@" not in text:
                 completer.model().setStringList([text + domain])
             else:
-                completer.model().setStringList([])  # @ sonrası öneri göstermesin
+                completer.model().setStringList([])
 
         self.email_input.textChanged.connect(update_completion)
 
@@ -193,6 +216,34 @@ class LoginWindow(QMainWindow):
         )
         self.password_input = password_container.findChild(QLineEdit)
         self.password_input.returnPressed.connect(self.handle_login)
+
+        # Şifremi Unuttum Butonu
+        self.forgot_password_btn = QPushButton("Şifremi Unuttum🔑")
+        self.forgot_password_btn.setCursor(Qt.PointingHandCursor)
+        self.forgot_password_btn.clicked.connect(self.handle_forgot_password)
+        self.forgot_password_btn.setStyleSheet("""
+            QPushButton {
+                text-align: right;
+                color: #27ae60;
+                font-size: 14px;
+                border: none;
+                background-color: transparent;
+                padding: 0px;
+                margin-top: -5px; 
+            }
+            QPushButton:hover {
+                color: #229954;
+                text-decoration: underline;
+            }
+            QPushButton:disabled {
+                color: #95a5a6;
+            }
+        """)
+
+        # Butonu sağa hizalamak için bir layout
+        forgot_pass_layout = QHBoxLayout()
+        forgot_pass_layout.addStretch()
+        forgot_pass_layout.addWidget(self.forgot_password_btn)
 
         # Giriş butonu
         self.login_btn = QPushButton('GİRİŞ YAP')
@@ -223,7 +274,8 @@ class LoginWindow(QMainWindow):
         layout.addWidget(form_title)
         layout.addWidget(email_container)
         layout.addWidget(password_container)
-        layout.addSpacing(30)
+        layout.addLayout(forgot_pass_layout)
+        layout.addSpacing(20)
         layout.addWidget(self.login_btn)
 
         card.setLayout(layout)
@@ -284,7 +336,6 @@ class LoginWindow(QMainWindow):
         container.setLayout(layout)
         return container
 
-
     def handle_login(self):
         """Giriş işlemi"""
         email = self.email_input.text().strip()
@@ -292,20 +343,16 @@ class LoginWindow(QMainWindow):
 
         # Validasyon
         if not email:
-            # self.show_error('E-posta adresi boş olamaz!') <-- DEĞİŞTİ
             show_error_message(self, 'Hata', 'E-posta adresi boş olamaz!')
             self.email_input.setFocus()
             return
 
         if not password:
-            # self.show_error('Şifre boş olamaz!') <-- DEĞİŞTİ
             show_error_message(self, 'Hata', 'Şifre boş olamaz!')
             self.password_input.setFocus()
             return
 
-        # E-posta format kontrolü is_valid_email helper'ı ile yapıldı <-- DEĞİŞTİ
         if not is_valid_email(email):
-            # self.show_error('Geçerli bir e-posta adresi girin!') <-- DEĞİŞTİ
             show_error_message(self, 'Hata', 'Geçerli bir e-posta adresi girin!')
             self.email_input.setFocus()
             return
@@ -313,7 +360,7 @@ class LoginWindow(QMainWindow):
         # Butonu devre dışı bırak
         self.login_btn.setEnabled(False)
         self.login_btn.setText('⏳ GİRİŞ YAPILIYOR...')
-        QApplication.processEvents()  # UI güncelle
+        QApplication.processEvents()
 
         try:
             user = Database.authenticate_user(email, password)
@@ -322,7 +369,6 @@ class LoginWindow(QMainWindow):
                 self.current_user = user
                 self.open_main_window(user)
             else:
-                # self.show_error(...) <-- DEĞİŞTİ
                 show_error_message(
                     self,
                     'Giriş Başarısız!',
@@ -333,7 +379,6 @@ class LoginWindow(QMainWindow):
                 self.password_input.setFocus()
 
         except Exception as e:
-            # self.show_error(f'Bağlantı Hatası!\n\n{str(e)}') <-- DEĞİŞTİ
             show_error_message(self, 'Bağlantı Hatası!', f'Bağlantı Hatası!\n\n{str(e)}')
 
         finally:
@@ -355,6 +400,106 @@ class LoginWindow(QMainWindow):
             import traceback
             traceback.print_exc()
 
+    # Şifre Sıfırlama Fonksiyonları
+
+    def _generate_password(self):
+        """8 haneli rastgele şifre oluşturur."""
+        return ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+
+    def _send_password_email(self, email, password):
+        """Yeni şifreyi e-posta olarak gönderir."""
+        try:
+            smtp_server = "smtp.gmail.com"
+            port = 587
+            sender_email = "bobs88806@gmail.com"
+            app_password = "gbujucqoglugafal" # <--- BURAYA YAPIŞTIRIN
+
+
+            msg = MIMEMultipart()
+            msg["Subject"] = "Yeni Şifre Talebi - Sınav Takvim Sistemi"
+            msg["From"] = sender_email
+            msg["To"] = email
+
+            body = f"""
+Merhaba,
+
+Sınav takvimi yönetim sistemi için yeni bir şifre talep ettiniz.
+
+Yeni giriş bilgileriniz:
+Email: {email}
+Yeni Şifre: {password}
+
+Lütfen giriş yaptıktan sonra bu geçici şifreyi değiştiriniz.
+"""
+            msg.attach(MIMEText(body, "plain"))
+
+            server = smtplib.SMTP(smtp_server, port)
+            server.starttls()
+            server.login(sender_email, app_password)
+            server.sendmail(sender_email, email, msg.as_string())
+            server.quit()
+            return True
+        except Exception as e:
+            print(f"Mail gönderme hatası: {e}")
+            return False
+
+    def handle_forgot_password(self):
+        """'Şifremi Unuttum' butonuna tıklandığında çalışır."""
+
+        email = self.email_input.text().strip()
+
+        # 1. E-posta geçerli mi?
+        if not is_valid_email(email):
+            show_error_message(self, "Hata", "Lütfen şifresini sıfırlamak istediğiniz\n"
+                                             "geçerli bir e-posta adresi girin.")
+            self.email_input.setFocus()
+            return
+
+        # 2. Butonları devre dışı bırak
+        self.login_btn.setEnabled(False)
+        self.forgot_password_btn.setEnabled(False)
+        self.forgot_password_btn.setText("Gönderiliyor...")
+        QApplication.processEvents()
+
+        try:
+            # 3. Kullanıcı veritabanında var mı?
+            user_exists = Database.execute_query(
+                "SELECT kullanici_id FROM kullanicilar WHERE email = %s AND aktif = true", (email,)
+            )
+
+            if not user_exists:
+                show_error_message(self, "Hata", "Bu e-posta adresi sistemde kayıtlı değil.")
+                return
+
+            # 4. Yeni şifre oluştur ve hash'le
+            new_password = self._generate_password()
+            hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+            # 5. Veritabanını güncelle
+            Database.execute_non_query(
+                "UPDATE kullanicilar SET sifre_hash = %s WHERE email = %s",
+                (hashed_password, email)
+            )
+
+            # 6. E-posta gönder
+            if self._send_password_email(email, new_password):
+                show_info_message(self, "Başarılı",
+                                  f"Yeni şifreniz {email} adresine gönderildi.\n"
+                                  "Lütfen e-postanızı kontrol edin.")
+            else:
+                show_error_message(self, "Mail Gönderim Hatası",
+                                   "Şifre sıfırlandı ancak e-posta gönderilemedi.\n"
+                                   "Lütfen sistem yöneticisi ile iletişime geçin.")
+
+        except Exception as e:
+            show_error_message(self, "Veritabanı Hatası", f"Bir hata oluştu: {e}")
+
+        finally:
+            # 7. Butonları tekrar aktif et
+            self.login_btn.setEnabled(True)
+            self.forgot_password_btn.setEnabled(True)
+            self.forgot_password_btn.setText("Şifremi Unuttum")
+
 
 # Standalone test
 if __name__ == '__main__':
@@ -365,6 +510,8 @@ if __name__ == '__main__':
     app.setFont(font)
 
     window = LoginWindow()
-    window.show()
+    ### DEĞİŞİKLİK 5: Pencere artık tam ekran olarak açılacak ###
+    window.showMaximized()
+    ### DEĞİŞİKLİK 5 SONU ###
 
     sys.exit(app.exec_())
