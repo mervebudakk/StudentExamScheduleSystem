@@ -377,15 +377,19 @@ class MainDashboard(QMainWindow):
 
     def open_user_management(self):
         if not self.permission_manager.has_permission('KULLANICI_EKLE'):
-            self.show_permission_error(); return
-        QMessageBox.information(self, 'Kullanıcı Yönetimi', 'Kullanıcı yönetim ekranı hazırlanıyor...')
+            self.show_permission_error()
+            return
+
+        from student_system.views.user_management import UserManagement
+        self.clear_content_area()
+        self.cm_widget = UserManagement(self.user)
+        self.content_layout.addWidget(self.cm_widget)
 
     def open_classroom_management(self):
         if not self.permission_manager.has_permission('DERSLIK_YONET'):
             self.show_permission_error()
             return
 
-            # Ayrı pencere yerine içerik alanını doldur
         from student_system.views.classroom_management import ClassroomManagement
         self.clear_content_area()
         self.cm_widget = ClassroomManagement(self.user, self.permission_manager, parent=self)

@@ -548,7 +548,7 @@ class ExamScheduler(QWidget):
             cur.execute("""
                 INSERT INTO Sinavlar 
                 (ders_id, bolum_id, sinav_turu, sinav_tarihi, sinav_saati, durum)
-                VALUES (%s, %s, %s, %s, %s, 'Planlandı')
+                VALUES (%s, %s, %s, %s,  to_char(%s, 'HH24:MI'), 'Planlandı')
             """, (ders["ders_id"], c["bolum_id"], c["sinav_turu"],
                   tarih, saat_obj))
 
@@ -696,7 +696,6 @@ class ExamScheduler(QWidget):
             ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
             ws["A1"].fill = PatternFill("solid", fgColor=turuncu_baslik)
 
-            # ---- Tablo Başlıkları ----
             headers = ["Tarih", "Sınav Saati", "Ders Adı", "Öğretim Elemanı", "Derslik"]
             ws.append(headers)
 
@@ -717,7 +716,7 @@ class ExamScheduler(QWidget):
                 first_row = satir
 
                 for _, row in grup.iterrows():
-                    ws.cell(satir, 2, str(row["Saat"]))
+                    ws.cell(satir, 2, value=row["Saat"].strftime("%H:%M"))
                     ws.cell(satir, 3, row["Ders Adı"])
                     ws.cell(satir, 4, row["Öğretim Elemanı"])
                     ws.cell(satir, 5, row["Derslik"])
