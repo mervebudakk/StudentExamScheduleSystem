@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QListWidget, QListWidgetItem,
     QGroupBox, QFormLayout, QDateEdit, QCheckBox, QComboBox, QSpinBox, QTableWidget,
-    QTableWidgetItem, QMessageBox, QFileDialog, QScrollArea, QFrame
+    QTableWidgetItem, QMessageBox, QFileDialog, QScrollArea, QFrame, QHeaderView
 )
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QFont, QColor, QPalette
@@ -19,10 +19,6 @@ class ExamScheduler(QWidget):
         super().__init__(parent)
         self.user = user
 
-        if not self.user or not self.user.get("bolum_id"):
-            QMessageBox.critical(self, "Hata", "Bölüm bilgisi olmayan kullanıcı işlem yapamaz.")
-            return
-
         self._init_ui()
         self._apply_modern_styles()
         self._load_lessons()
@@ -30,7 +26,7 @@ class ExamScheduler(QWidget):
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(20)
-        main_layout.setContentsMargins(25, 25, 25, 25)
+        main_layout.setContentsMargins(30, 30, 30, 30)
 
         self._create_header(main_layout)
 
@@ -43,30 +39,24 @@ class ExamScheduler(QWidget):
         main_layout.addLayout(content_layout)
 
     def _create_header(self, parent_layout):
-        header_frame = QFrame()
-        header_frame.setObjectName("headerFrame")
-        header_layout = QVBoxLayout(header_frame)
-
-        title = QLabel(f"📅 {self.user['bolum_adi']}")
-        title.setObjectName("mainTitle")
-        title.setAlignment(Qt.AlignCenter)
-
-        subtitle = QLabel("Sınav Programı Oluşturma Sistemi")
-        subtitle.setObjectName("subtitle")
-        subtitle.setAlignment(Qt.AlignCenter)
-
-        header_layout.addWidget(title)
-        header_layout.addWidget(subtitle)
-        parent_layout.addWidget(header_frame)
+        title = QLabel(f"{self.user['bolum_adi']} - Sınav Programı")
+        title.setAlignment(Qt.AlignLeft)
+        title.setStyleSheet("""
+            font-size: 28px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        """)
+        parent_layout.addWidget(title)
 
     def _create_left_panel(self, parent_layout):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setObjectName("scrollArea")
+        scroll_area.setFrameShape(QFrame.NoFrame)
 
         left_widget = QWidget()
         left_layout = QVBoxLayout(left_widget)
-        left_layout.setSpacing(15)
+        left_layout.setSpacing(20)
 
         self._create_lesson_selection_group(left_layout)
         self._create_date_settings_group(left_layout)
@@ -78,24 +68,91 @@ class ExamScheduler(QWidget):
         parent_layout.addWidget(scroll_area, 2)
 
     def _create_lesson_selection_group(self, parent_layout):
-        group = QGroupBox("📚 Ders Seçimi")
-        group.setObjectName("modernGroup")
+        group = QGroupBox("Ders Seçimi")
+        group.setStyleSheet("""
+            QGroupBox {
+                background-color: white;
+                border: 2px solid #e0e0e0;
+                border-radius: 10px;
+                padding: 20px 15px 15px 15px;
+                font-weight: 600;
+                font-size: 15px;
+                color: #2c3e50;
+                margin-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 0 8px;
+            }
+        """)
         layout = QVBoxLayout(group)
+        layout.setSpacing(12)
 
         self.lesson_list = QListWidget()
-        self.lesson_list.setObjectName("lessonList")
+        self.lesson_list.setMinimumHeight(250)
         self.lesson_list.setSelectionMode(QListWidget.NoSelection)
+        self.lesson_list.setStyleSheet("""
+            QListWidget {
+                background-color: #fafbfc;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 14px;
+            }
+            QListWidget::item {
+                padding: 10px;
+                border-radius: 6px;
+                margin: 2px 0;
+            }
+            QListWidget::item:hover {
+                background-color: #e8f0fe;
+            }
+        """)
         layout.addWidget(self.lesson_list)
 
         button_layout = QHBoxLayout()
+        button_layout.setSpacing(10)
 
-        self.btn_all = QPushButton("✓ Tümünü Seç")
-        self.btn_all.setObjectName("primaryButton")
+        self.btn_all = QPushButton("Tümünü Seç")
         self.btn_all.clicked.connect(lambda: self._toggle_all(True))
+        self.btn_all.setStyleSheet("""
+            QPushButton {
+                background-color: #667eea;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #5568d3;
+            }
+            QPushButton:pressed {
+                background-color: #4c5cba;
+            }
+        """)
 
-        self.btn_none = QPushButton("✗ Tümünü Kaldır")
-        self.btn_none.setObjectName("secondaryButton")
+        self.btn_none = QPushButton("Tümünü Kaldır")
         self.btn_none.clicked.connect(lambda: self._toggle_all(False))
+        self.btn_none.setStyleSheet("""
+            QPushButton {
+                background-color: #e0e0e0;
+                color: #2c3e50;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #cbd5e0;
+            }
+            QPushButton:pressed {
+                background-color: #a0aec0;
+            }
+        """)
 
         button_layout.addWidget(self.btn_all)
         button_layout.addWidget(self.btn_none)
@@ -104,28 +161,66 @@ class ExamScheduler(QWidget):
         parent_layout.addWidget(group)
 
     def _create_date_settings_group(self, parent_layout):
-        group = QGroupBox("📆 Tarih ve Gün Ayarları")
-        group.setObjectName("modernGroup")
+        group = QGroupBox("Tarih ve Gün Ayarları")
+        group.setStyleSheet("""
+            QGroupBox {
+                background-color: white;
+                border: 2px solid #e0e0e0;
+                border-radius: 10px;
+                padding: 20px 15px 15px 15px;
+                font-weight: 600;
+                font-size: 15px;
+                color: #2c3e50;
+                margin-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 0 8px;
+            }
+        """)
         form_layout = QFormLayout(group)
-        form_layout.setSpacing(10)
+        form_layout.setSpacing(15)
 
         self.date_from = QDateEdit(QDate.currentDate())
         self.date_from.setCalendarPopup(True)
-        self.date_from.setObjectName("dateEdit")
+        self.date_from.setStyleSheet("""
+            QDateEdit {
+                padding: 10px;
+                border: 2px solid #e0e0e0;
+                border-radius: 6px;
+                font-size: 14px;
+                background-color: white;
+            }
+            QDateEdit:focus {
+                border: 2px solid #667eea;
+            }
+        """)
 
         self.date_to = QDateEdit(QDate.currentDate().addDays(14))
         self.date_to.setCalendarPopup(True)
-        self.date_to.setObjectName("dateEdit")
+        self.date_to.setStyleSheet("""
+            QDateEdit {
+                padding: 10px;
+                border: 2px solid #e0e0e0;
+                border-radius: 6px;
+                font-size: 14px;
+                background-color: white;
+            }
+            QDateEdit:focus {
+                border: 2px solid #667eea;
+            }
+        """)
 
-        form_layout.addRow("Başlangıç Tarihi:", self.date_from)
-        form_layout.addRow("Bitiş Tarihi:", self.date_to)
+        form_layout.addRow("Başlangıç:", self.date_from)
+        form_layout.addRow("Bitiş:", self.date_to)
 
         days_label = QLabel("Sınav Günleri:")
-        days_label.setObjectName("formLabel")
+        days_label.setStyleSheet("font-weight: 500; color: #4a5568; font-size: 14px;")
         form_layout.addRow(days_label)
 
         days_layout = QHBoxLayout()
-        days_layout.setSpacing(5)
+        days_layout.setSpacing(8)
 
         self.chk_mon = self._create_day_checkbox("Pzt", True)
         self.chk_tue = self._create_day_checkbox("Sal", True)
@@ -144,52 +239,164 @@ class ExamScheduler(QWidget):
 
     def _create_day_checkbox(self, text, checked):
         checkbox = QCheckBox(text)
-        checkbox.setObjectName("dayCheckbox")
         checkbox.setChecked(checked)
+        checkbox.setStyleSheet("""
+            QCheckBox {
+                background-color: white;
+                border: 2px solid #e0e0e0;
+                border-radius: 6px;
+                padding: 8px 10px;
+                font-size: 13px;
+                font-weight: 500;
+            }
+            QCheckBox:hover {
+                border: 2px solid #667eea;
+            }
+            QCheckBox:checked {
+                background-color: #667eea;
+                color: white;
+                border: 2px solid #667eea;
+            }
+            QCheckBox::indicator {
+                width: 0px;
+                height: 0px;
+            }
+        """)
         return checkbox
 
     def _create_exam_settings_group(self, parent_layout):
-        group = QGroupBox("⚙️ Sınav Ayarları")
-        group.setObjectName("modernGroup")
+        group = QGroupBox("Sınav Ayarları")
+        group.setStyleSheet("""
+            QGroupBox {
+                background-color: white;
+                border: 2px solid #e0e0e0;
+                border-radius: 10px;
+                padding: 20px 15px 15px 15px;
+                font-weight: 600;
+                font-size: 15px;
+                color: #2c3e50;
+                margin-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 0 8px;
+            }
+        """)
         form_layout = QFormLayout(group)
-        form_layout.setSpacing(10)
+        form_layout.setSpacing(15)
 
         self.cmb_type = QComboBox()
-        self.cmb_type.setObjectName("comboBox")
         self.cmb_type.addItems(["Vize", "Final", "Bütünleme"])
+        self.cmb_type.setStyleSheet("""
+            QComboBox {
+                padding: 10px;
+                border: 2px solid #e0e0e0;
+                border-radius: 6px;
+                font-size: 14px;
+                background-color: white;
+            }
+            QComboBox:focus {
+                border: 2px solid #667eea;
+            }
+            QComboBox::drop-down {
+                border: none;
+                padding-right: 10px;
+            }
+        """)
 
         self.spin_duration = QSpinBox()
-        self.spin_duration.setObjectName("spinBox")
         self.spin_duration.setRange(30, 240)
         self.spin_duration.setValue(75)
         self.spin_duration.setSuffix(" dakika")
+        self.spin_duration.setStyleSheet("""
+            QSpinBox {
+                padding: 10px;
+                border: 2px solid #e0e0e0;
+                border-radius: 6px;
+                font-size: 14px;
+                background-color: white;
+            }
+            QSpinBox:focus {
+                border: 2px solid #667eea;
+            }
+        """)
 
         self.spin_break = QSpinBox()
-        self.spin_break.setObjectName("spinBox")
         self.spin_break.setRange(0, 120)
         self.spin_break.setValue(15)
         self.spin_break.setSuffix(" dakika")
+        self.spin_break.setStyleSheet("""
+            QSpinBox {
+                padding: 10px;
+                border: 2px solid #e0e0e0;
+                border-radius: 6px;
+                font-size: 14px;
+                background-color: white;
+            }
+            QSpinBox:focus {
+                border: 2px solid #667eea;
+            }
+        """)
 
         self.chk_no_overlap = QCheckBox("Sınavlar çakışmasın")
-        self.chk_no_overlap.setObjectName("settingsCheckbox")
+        self.chk_no_overlap.setStyleSheet("""
+            QCheckBox {
+                padding: 8px;
+                font-weight: 500;
+                font-size: 14px;
+            }
+        """)
 
         form_layout.addRow("Sınav Türü:", self.cmb_type)
         form_layout.addRow("Sınav Süresi:", self.spin_duration)
-        form_layout.addRow("Bekleme Süresi:", self.spin_break)
+        form_layout.addRow("Ara:", self.spin_break)
         form_layout.addRow(self.chk_no_overlap)
 
         parent_layout.addWidget(group)
 
     def _create_action_buttons(self, parent_layout):
-        self.btn_generate = QPushButton("🚀 Programı Oluştur")
-        self.btn_generate.setObjectName("generateButton")
+        self.btn_generate = QPushButton("Programı Oluştur")
         self.btn_generate.setMinimumHeight(50)
         self.btn_generate.clicked.connect(self._on_generate_clicked)
+        self.btn_generate.setStyleSheet("""
+            QPushButton {
+                background-color: #10b981;
+                color: white;
+                border: none;
+                padding: 12px;
+                border-radius: 8px;
+                font-size: 15px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #059669;
+            }
+            QPushButton:pressed {
+                background-color: #047857;
+            }
+        """)
 
-        self.export_button = QPushButton("📥 Excel Olarak İndir")
-        self.export_button.setObjectName("exportButton")
+        self.export_button = QPushButton("Excel Olarak İndir")
         self.export_button.setMinimumHeight(45)
         self.export_button.clicked.connect(self.export_to_excel)
+        self.export_button.setStyleSheet("""
+            QPushButton {
+                background-color: #f59e0b;
+                color: white;
+                border: none;
+                padding: 12px;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #d97706;
+            }
+            QPushButton:pressed {
+                background-color: #b45309;
+            }
+        """)
 
         parent_layout.addWidget(self.btn_generate)
         parent_layout.addWidget(self.export_button)
@@ -197,19 +404,55 @@ class ExamScheduler(QWidget):
     def _create_right_panel(self, parent_layout):
         right_widget = QWidget()
         right_layout = QVBoxLayout(right_widget)
-        right_layout.setSpacing(10)
+        right_layout.setSpacing(15)
 
-        preview_label = QLabel("📋 Program Önizlemesi")
-        preview_label.setObjectName("sectionTitle")
+        preview_label = QLabel("Program Önizlemesi")
+        preview_label.setStyleSheet("""
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+            padding: 5px 0;
+        """)
         right_layout.addWidget(preview_label)
 
         self.preview = QTableWidget(0, 6)
-        self.preview.setObjectName("previewTable")
         self.preview.setHorizontalHeaderLabels([
             "Ders Kodu", "Ders Adı", "Tarih", "Saat", "Sınıf", "Derslik"
         ])
-        self.preview.horizontalHeader().setStretchLastSection(True)
+        self.preview.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.preview.setSelectionBehavior(QTableWidget.SelectRows)
+        self.preview.setSelectionMode(QTableWidget.SingleSelection)
         self.preview.setAlternatingRowColors(True)
+        self.preview.setShowGrid(False)
+        self.preview.verticalHeader().setVisible(False)
+        self.preview.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                border: 2px solid #e0e0e0;
+                border-radius: 10px;
+                font-size: 14px;
+            }
+            QTableWidget::item {
+                padding: 12px;
+                border-bottom: 1px solid #f0f0f0;
+            }
+            QTableWidget::item:selected {
+                background-color: #667eea;
+                color: white;
+            }
+            QHeaderView::section {
+                background-color: #f8f9fa;
+                padding: 12px;
+                border: none;
+                border-bottom: 2px solid #e0e0e0;
+                font-weight: 600;
+                color: #2c3e50;
+                font-size: 13px;
+            }
+            QTableWidget::item:alternate {
+                background-color: #fafbfc;
+            }
+        """)
 
         right_layout.addWidget(self.preview)
         parent_layout.addWidget(right_widget, 3)
@@ -220,229 +463,31 @@ class ExamScheduler(QWidget):
                 background-color: #f5f7fa;
                 color: #2c3e50;
                 font-family: 'Segoe UI', Arial, sans-serif;
-                font-size: 13px;
             }
-
-            #headerFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #667eea, stop:1 #764ba2);
-                border-radius: 12px;
-                padding: 25px 20px;
-                min-height: 100px;
-            }
-
-            #mainTitle {
-                font-size: 24px;
-                font-weight: bold;
-                color: white;
-                margin: 8px 5px;
-                padding: 5px;
-            }
-
-            #subtitle {
-                font-size: 15px;
-                color: rgba(255, 255, 255, 0.95);
-                margin: 8px 5px;
-                padding: 5px;
-            }
-
-            #modernGroup {
-                background-color: white;
-                border: 1px solid #e1e8ed;
-                border-radius: 10px;
-                padding: 15px;
-                font-weight: bold;
+            QLabel {
+                color: #4a5568;
                 font-size: 14px;
-            }
-
-            #modernGroup::title {
-                subcontrol-origin: margin;
-                left: 15px;
-                padding: 5px 10px;
-                color: #667eea;
-            }
-
-            #lessonList {
-                background-color: #fafbfc;
-                border: 1px solid #e1e8ed;
-                border-radius: 8px;
-                padding: 8px;
-                min-height: 200px;
-            }
-
-            #lessonList::item {
-                padding: 8px;
-                border-radius: 5px;
-                margin: 2px 0px;
-            }
-
-            #lessonList::item:hover {
-                background-color: #e8f0fe;
-            }
-
-            #lessonList::item:checked {
-                background-color: #d3e3fd;
-            }
-
-            QPushButton {
-                border-radius: 8px;
-                padding: 10px 20px;
-                font-weight: 500;
-                border: none;
-            }
-
-            #primaryButton {
-                background-color: #667eea;
-                color: white;
-            }
-
-            #primaryButton:hover {
-                background-color: #5568d3;
-            }
-
-            #primaryButton:pressed {
-                background-color: #4451b8;
-            }
-
-            #secondaryButton {
-                background-color: #e1e8ed;
-                color: #2c3e50;
-            }
-
-            #secondaryButton:hover {
-                background-color: #cbd5e0;
-            }
-
-            #generateButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #11998e, stop:1 #38ef7d);
-                color: white;
-                font-size: 15px;
-                font-weight: bold;
-            }
-
-            #generateButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #0e8070, stop:1 #2dd863);
-            }
-
-            #exportButton {
-                background-color: #f39c12;
-                color: white;
-                font-size: 14px;
-                font-weight: bold;
-            }
-
-            #exportButton:hover {
-                background-color: #e67e22;
-            }
-
-            QComboBox, QSpinBox, QDateEdit {
-                background-color: white;
-                border: 1px solid #e1e8ed;
-                border-radius: 6px;
-                padding: 8px 12px;
-                min-height: 35px;
-            }
-
-            QComboBox:hover, QSpinBox:hover, QDateEdit:hover {
-                border: 1px solid #667eea;
-            }
-
-            QComboBox:focus, QSpinBox:focus, QDateEdit:focus {
-                border: 2px solid #667eea;
-            }
-
-            QComboBox::drop-down {
-                border: none;
-                padding-right: 10px;
-            }
-
-            QCheckBox {
-                spacing: 8px;
-            }
-
-            #dayCheckbox {
-                background-color: white;
-                border: 1px solid #e1e8ed;
-                border-radius: 6px;
-                padding: 8px 12px;
-                min-width: 45px;
-            }
-
-            #dayCheckbox:checked {
-                background-color: #667eea;
-                color: white;
-            }
-
-            #dayCheckbox::indicator {
-                width: 0px;
-                height: 0px;
-            }
-
-            #settingsCheckbox {
-                padding: 8px;
                 font-weight: 500;
             }
-
-            #previewTable {
-                background-color: white;
-                border: 1px solid #e1e8ed;
-                border-radius: 10px;
-                gridline-color: #e1e8ed;
-            }
-
-            #previewTable::item {
-                padding: 10px;
-            }
-
-            #previewTable::item:alternate {
-                background-color: #f8f9fa;
-            }
-
-            QHeaderView::section {
-                background-color: #667eea;
-                color: white;
-                padding: 12px;
-                border: none;
-                font-weight: bold;
-            }
-
-            #sectionTitle {
-                font-size: 16px;
-                font-weight: bold;
-                color: #2c3e50;
-                padding: 10px 5px;
-            }
-
             QScrollArea {
                 border: none;
                 background-color: transparent;
             }
-
             QScrollBar:vertical {
                 background: #f5f7fa;
-                width: 12px;
-                border-radius: 6px;
+                width: 10px;
+                border-radius: 5px;
             }
-
             QScrollBar::handle:vertical {
                 background: #cbd5e0;
-                border-radius: 6px;
+                border-radius: 5px;
                 min-height: 30px;
             }
-
             QScrollBar::handle:vertical:hover {
                 background: #a0aec0;
             }
-
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
                 height: 0px;
-            }
-
-            QFormLayout QLabel {
-                font-weight: 500;
-                color: #4a5568;
             }
         """)
 
@@ -510,13 +555,13 @@ class ExamScheduler(QWidget):
         try:
             constraints = self._collect_constraints()
             schedule = self._generate_schedule(constraints)
-            self._update_preview(schedule)
-            self.assign_exam_rooms()
+            self.assign_exam_rooms()      # <-- DOĞRU SIRA (Önce derslikleri ata)
+            self._update_preview(schedule) # <-- DOĞRU SIRA (Sonra ekranı güncelle)
 
             QMessageBox.information(
                 self,
                 "Başarılı",
-                f"✅ {len(schedule)} adet sınav başarıyla planlandı!"
+                f"{len(schedule)} adet sınav başarıyla planlandı!"
             )
         except ValueError as e:
             QMessageBox.warning(self, "Uyarı", str(e))
@@ -548,7 +593,7 @@ class ExamScheduler(QWidget):
             cur.execute("""
                 INSERT INTO Sinavlar 
                 (ders_id, bolum_id, sinav_turu, sinav_tarihi, sinav_saati, durum)
-                VALUES (%s, %s, %s, %s,  to_char(%s, 'HH24:MI'), 'Planlandı')
+                VALUES (%s, %s, %s, %s, %s, 'Planlandı')
             """, (ders["ders_id"], c["bolum_id"], c["sinav_turu"],
                   tarih, saat_obj))
 
@@ -626,16 +671,44 @@ class ExamScheduler(QWidget):
     def _update_preview(self, schedule):
         self.preview.setRowCount(0)
 
-        for ders, tarih, saat_obj in schedule:
-            row = self.preview.rowCount()
-            self.preview.insertRow(row)
+        conn = Database.get_connection()
+        cur = conn.cursor()
 
-            self.preview.setItem(row, 0, QTableWidgetItem(ders["ders_kodu"]))
-            self.preview.setItem(row, 1, QTableWidgetItem(ders["ders_adi"]))
-            self.preview.setItem(row, 2, QTableWidgetItem(tarih.strftime("%d.%m.%Y")))
-            self.preview.setItem(row, 3, QTableWidgetItem(saat_obj.strftime("%H:%M")))
-            self.preview.setItem(row, 4, QTableWidgetItem(str(ders.get("sinif", ""))))
-            self.preview.setItem(row, 5, QTableWidgetItem("Atanacak"))
+        cur.execute("""
+            SELECT 
+                s.sinav_id,
+                d.ders_kodu,
+                d.ders_adi,
+                d.sinif,
+                s.sinav_tarihi,
+                s.sinav_saati,
+                COALESCE(STRING_AGG(dl.derslik_adi, ', '), 'Atanamadı') AS derslikler
+            FROM Sinavlar s
+            JOIN Dersler d ON s.ders_id = d.ders_id
+            LEFT JOIN SinavDerslikleri sd ON s.sinav_id = sd.sinav_id
+            LEFT JOIN Derslikler dl ON sd.derslik_id = dl.derslik_id
+            WHERE s.bolum_id = %s AND s.sinav_turu = %s
+            GROUP BY s.sinav_id, d.ders_kodu, d.ders_adi, d.sinif, s.sinav_tarihi, s.sinav_saati
+            ORDER BY s.sinav_tarihi, s.sinav_saati
+        """, (self.user["bolum_id"], self.cmb_type.currentText()))
+
+        rows = cur.fetchall()
+
+        for i, row in enumerate(rows):
+            sinav_id, kod, adi, sinif, tarih, saat, derslikler = row
+
+            self.preview.insertRow(i)
+            self.preview.setItem(i, 0, QTableWidgetItem(kod))
+            self.preview.setItem(i, 1, QTableWidgetItem(adi))
+            self.preview.setItem(i, 2, QTableWidgetItem(tarih.strftime("%d.%m.%Y")))
+            self.preview.setItem(i, 3, QTableWidgetItem(saat.strftime("%H:%M")))
+            self.preview.setItem(i, 4, QTableWidgetItem(str(sinif)))
+            self.preview.setItem(i, 5, QTableWidgetItem(derslikler))
+
+            self.preview.setRowHeight(i, 50)
+
+        cur.close()
+        conn.close()
 
     def export_to_excel(self):
         try:
@@ -689,7 +762,6 @@ class ExamScheduler(QWidget):
                 top=Side(style="thin"), bottom=Side(style="thin")
             )
 
-            # ---- Ana Başlık ----
             ws.merge_cells("A1:E1")
             ws["A1"] = f"{self.user['bolum_adi']} {sinav_turu.upper()} SINAV PROGRAMI"
             ws["A1"].font = Font(bold=True, size=14)
@@ -737,22 +809,17 @@ class ExamScheduler(QWidget):
                 date_cell.fill = gun_rengi
                 date_cell.alignment = Alignment(text_rotation=90, horizontal="center", vertical="center")
 
-            # Otomatik genişlik
             widths = [15, 15, 40, 30, 25]
             for i, w in enumerate(widths, 1):
                 ws.column_dimensions[get_column_letter(i)].width = w
 
             wb.save(path)
-            QMessageBox.information(self, "Başarılı", f"✅ Excel kaydedildi:\n{path}")
+            QMessageBox.information(self, "Başarılı", f"Excel dosyası kaydedildi:\n{path}")
 
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Hata oluştu:\n{str(e)}")
 
     def assign_exam_rooms(self):
-        """
-        Sınavları dersliklere atar - Birden fazla derslik gerekiyorsa böler
-        Öğrenci sayısına göre minimum derslik kullanımı sağlar
-        """
         try:
             conn = Database.get_connection()
             cur = conn.cursor()
@@ -860,14 +927,12 @@ class ExamScheduler(QWidget):
                         f"⚠️ {ders_adi}: {ogrenci_sayisi} öğrenci, "
                         f"atanan kapasite: {toplam_atanan_kapasite} → {derslik_str}"
                     )
-                else:
-                    print(f"✅ {ders_adi}: {ogrenci_sayisi} öğrenci → {derslik_str}")
 
             conn.commit()
             cur.close()
             conn.close()
 
-            mesaj = f"✅ Toplam {toplam_atama} derslik ataması yapıldı."
+            mesaj = f"Toplam {toplam_atama} derslik ataması yapıldı."
 
             if uyari_listesi:
                 mesaj += f"\n\n⚠️ {len(uyari_listesi)} uyarı:\n" + "\n".join(uyari_listesi[:5])
@@ -878,26 +943,9 @@ class ExamScheduler(QWidget):
 
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Derslik atama hatası: {str(e)}")
-            import traceback
-            traceback.print_exc()
 
     def _select_optimal_classrooms(self, derslikler, ogrenci_sayisi, tarih_date,
                                    saat_time, derslik_programi, onceki_slot_derslikler):
-        """
-        Verilen öğrenci sayısını karşılayacak minimum sayıda derslik seçer
-
-        Args:
-            derslikler: Tüm derslikler listesi (kapasite DESC sıralı)
-            ogrenci_sayisi: Dersi alan öğrenci sayısı
-            tarih_date: Sınav tarihi
-            saat_time: Sınav saati
-            derslik_programi: Mevcut derslik programı
-            onceki_slot_derslikler: Bir önceki slotta kullanılan derslikler
-
-        Returns:
-            List[Tuple]: Seçilen derslikler [(derslik_id, derslik_adi, kapasite), ...]
-        """
-
         uygun_derslikler = []
         for derslik_id, derslik_adi, kapasite in derslikler:
             gunluk_program = derslik_programi.get(derslik_id, {}).get(tarih_date, [])
@@ -923,9 +971,5 @@ class ExamScheduler(QWidget):
 
             if kalan_ogrenci <= 0:
                 break
-
-        if kalan_ogrenci > 0:
-            print(f"⚠️ {ogrenci_sayisi} öğrenci için yeterli derslik yok. "
-                  f"Eksik kapasite: {kalan_ogrenci}")
 
         return secilen_derslikler

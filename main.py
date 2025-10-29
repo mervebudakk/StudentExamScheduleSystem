@@ -39,5 +39,5 @@ def main():
 
 
 if __name__ == '__main__':
-    print("🚀 Uygulama başlatılıyor...")
+    print("Uygulama başlatılıyor")
     main()

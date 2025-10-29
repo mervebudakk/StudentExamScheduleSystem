@@ -46,9 +46,6 @@ class LessonListUploader(QWidget):
     def __init__(self, user, parent=None):
         super().__init__(parent)
         self.user = user
-        if not self.user or not self.user.get('bolum_id'):
-            QMessageBox.critical(self, "Hata", "Bölüm bilgisi olmayan bir kullanıcı bu işlemi yapamaz.")
-            return
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(30, 30, 30, 30)

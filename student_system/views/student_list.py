@@ -162,10 +162,6 @@ class StudentListUploader(QWidget):
         self.user = user
         self.worker = None
 
-        if not self.user or not self.user.get("bolum_id"):
-            QMessageBox.critical(self, "Hata", "Bölüm bilgisi olmayan kullanıcı işlem yapamaz.")
-            return
-
         layout = QVBoxLayout(self)
         layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(20)
