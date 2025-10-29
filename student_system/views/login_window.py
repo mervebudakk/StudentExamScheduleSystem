@@ -24,7 +24,6 @@ class LoginWindow(QMainWindow):
         """Arayüzü oluştur"""
         # Pencere ayarları
         self.setWindowTitle('Sınav Takvimi Sistemi - Giriş')
-        self.setFixedSize(550, 700)
 
         # Arka plan resmi ile gradient overlay
         import os
@@ -149,7 +148,7 @@ class LoginWindow(QMainWindow):
 
         layout = QVBoxLayout()
         layout.setContentsMargins(45, 40, 45, 40)
-        layout.setSpacing(22)
+        layout.setSpacing(15)
 
         # Başlık
         form_title = QLabel('Hoş Geldiniz')
@@ -177,9 +176,8 @@ class LoginWindow(QMainWindow):
         completer.setCaseSensitivity(Qt.CaseInsensitive)
         completer.setCompletionMode(QCompleter.PopupCompletion)
         self.email_input.setCompleter(completer)
-        self._domain_completer = completer  # (istersen sakla)
+        self._domain_completer = completer
 
-        # Yazılanı dinle ve öneriyi güncelle
         def update_completion(text):
             if "@" not in text:
                 completer.model().setStringList([text + domain])
@@ -224,9 +222,8 @@ class LoginWindow(QMainWindow):
 
         layout.addWidget(form_title)
         layout.addWidget(email_container)
-        layout.addSpacing(10)
         layout.addWidget(password_container)
-        layout.addSpacing(10)
+        layout.addSpacing(30)
         layout.addWidget(self.login_btn)
 
         card.setLayout(layout)
@@ -353,7 +350,6 @@ class LoginWindow(QMainWindow):
             self.close()
 
         except Exception as e:
-            # self.show_error(f'Dashboard açılırken hata:\n\n{str(e)}') <-- DEĞİŞTİ
             show_error_message(self, 'Hata', f'Dashboard açılırken hata:\n\n{str(e)}')
             print(f"Hata detayı: {e}")
             import traceback

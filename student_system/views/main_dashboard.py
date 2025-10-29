@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QMessageBox, QFrame, QGridLayout, QScrollArea
+    QLabel, QPushButton, QMessageBox, QFrame, QGridLayout, QScrollArea, QComboBox
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
@@ -120,23 +120,19 @@ class MainDashboard(QMainWindow):
 
         menu_title = QLabel('MENÜ')
         menu_title.setStyleSheet("""
-            QLabel {
-                color: rgba(255, 255, 255, 0.9);
-                padding: 30px 20px 15px 20px;
-                font-size: 11px;
-                font-weight: 600;
-                letter-spacing: 1px;
-            }
-        """)
+                QLabel {
+                    color: rgba(255, 255, 255, 0.9);
+                    padding: 25px 25px 10px 25px;
+                    font-size: 13px;
+                    font-weight: 700;
+                    letter-spacing: 1px;
+                }
+            """)
         layout.addWidget(menu_title)
 
         for item in self.get_menu_items():
             btn = self.create_menu_button(item['text'], item['icon'], item['callback'])
-
-            ### YENİ EKLENTİ: Buton referansını sakla ###
             self.menu_buttons[item['text']] = btn
-            ### YENİ EKLENTİ SONU ###
-
             layout.addWidget(btn)
 
         layout.addStretch()
@@ -175,18 +171,18 @@ class MainDashboard(QMainWindow):
         frame.setStyleSheet("""
             QFrame {
                 background-color: rgba(255, 255, 255, 0.15);
-                padding: 25px 15px;
-                margin: 20px 15px;
+                padding: 15px 15px;
+                margin: 15px 15px;
                 border-radius: 15px;
             }
         """)
 
         layout = QVBoxLayout()
-        layout.setSpacing(8)
+        layout.setSpacing(10)
 
         avatar = QLabel('👤')
         avatar.setAlignment(Qt.AlignCenter)
-        avatar.setStyleSheet("font-size: 50px;")
+        avatar.setStyleSheet("font-size: 40px;")
 
         name = QLabel(self.user['ad_soyad'])
         name.setAlignment(Qt.AlignCenter)
@@ -227,10 +223,10 @@ class MainDashboard(QMainWindow):
         btn.setStyleSheet("""
             QPushButton {
                 text-align: left;
-                padding: 15px 20px;
+                padding: 16px 25px;
                 border: none;
                 color: rgba(255, 255, 255, 0.95);
-                font-size: 14px;
+                font-size: 15px;
                 background-color: transparent;
                 border-left: 3px solid transparent;
             }
@@ -253,10 +249,10 @@ class MainDashboard(QMainWindow):
             self.active_menu_button.setStyleSheet("""
                 QPushButton {
                     text-align: left;
-                    padding: 15px 20px;
+                    padding: 16px 25px;
                     border: none;
                     color: rgba(255, 255, 255, 0.95);
-                    font-size: 14px;
+                    font-size: 15px;
                     background-color: transparent;
                     border-left: 3px solid transparent;
                 }
@@ -276,10 +272,10 @@ class MainDashboard(QMainWindow):
         button.setStyleSheet("""
             QPushButton {
                 text-align: left;
-                padding: 15px 20px;
+                padding: 16px 25px;
                 border: none;
                 color: white;
-                font-size: 14px;
+                font-size: 15px;
                 background-color: rgba(255, 255, 255, 0.15);
                 border-left: 3px solid white;
                 font-weight: 600;
@@ -598,14 +594,11 @@ class MainDashboard(QMainWindow):
                                  f"Ekran yüklenirken hata:\n\n{e}\n\n{traceback.format_exc()}")
 
     def logout(self):
-        # show_confirmation_dialog fonksiyonu "Evet" tıklandığında zaten True döner.
         if show_confirmation_dialog(self, 'Çıkış', 'Çıkış yapmak istediğinize emin misiniz?'):
-            # Kullanıcı "Evet" dediği için doğrudan çıkış işlemlerini yap:
             self.close()
             from student_system.views.login_window import LoginWindow
             self.login_window = LoginWindow()
             self.login_window.show()
 
     def show_permission_error(self):
-        # Yeni helper fonksiyonunuzu burada kullanın
         show_warning_message(self, 'Yetki Hatası', 'Bu işlem için yetkiniz bulunmamaktadır.')

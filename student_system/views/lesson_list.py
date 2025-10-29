@@ -68,7 +68,7 @@ class LessonListUploader(QWidget):
         hl.addWidget(title)
         hl.addStretch()
 
-        self.upload_btn = QPushButton("📁 Excel Dosyası Yükle")
+        self.upload_btn = QPushButton("Excel Dosyası Yükle")
         self.upload_btn.setCursor(Qt.PointingHandCursor)
         self.upload_btn.clicked.connect(self.upload_excel)
         self.upload_btn.setFixedHeight(45)

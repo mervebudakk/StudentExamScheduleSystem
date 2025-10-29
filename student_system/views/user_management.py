@@ -7,15 +7,11 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QFont
 from student_system.core.database import Database
-
-# --- YENİ İMPORTLAR ---
-# Artık helpers.py dosyasındaki fonksiyonları kullanıyoruz
 from student_system.utils.helpers import (
     show_warning_message,
     show_info_message,
     show_confirmation_dialog
 )
-# --- YENİ İMPORTLAR SONU ---
 
 import smtplib
 from email.mime.text import MIMEText
@@ -278,14 +274,11 @@ class UserManagement(QWidget):
     def delete_user(self):
         email = self.get_selected_email()
         if not email:
-            # QMessageBox.warning(...) <-- DEĞİŞTİ
             show_warning_message(self, "Uyarı", "Lütfen silmek için bir kullanıcı seçin!")
             return
 
-        # Uzun QMessageBox bloğu yerine helper fonksiyonu kullanıldı <-- DEĞİŞTİ
         if show_confirmation_dialog(self, "Silme Onayı", f"{email} kullanıcısı tamamen silinsin mi?"):
             Database.execute_non_query("DELETE FROM Kullanicilar WHERE email = %s", (email,))
-            # QMessageBox.information(...) <-- DEĞİŞTİ
             show_info_message(self, "Başarılı", "Kullanıcı silindi 🗑")
             self.load_users()
 
