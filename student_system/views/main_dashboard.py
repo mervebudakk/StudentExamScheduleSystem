@@ -1,30 +1,20 @@
-"""
-Dinamik Sınav Takvimi Sistemi - Ana Dashboard
-Login window ile uyumlu yeşil tema
-"""
 import sys
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QMessageBox, QFrame, QGridLayout
+    QLabel, QPushButton, QMessageBox, QFrame, QGridLayout, QScrollArea
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from student_system.core.database import Database
-from student_system.views.seat_plan import SeatPlanView
 import traceback
 
 
-
-
 class PermissionManager:
-    """Yetki kontrol yöneticisi"""
-
     def __init__(self, user_id):
         self.user_id = user_id
         self.permissions = self.load_permissions()
 
     def load_permissions(self):
-        """Kullanıcının yetkilerini yükle"""
         perms = Database.execute_query("""
             SELECT y.yetki_kodu 
             FROM kullanicilar k
@@ -33,45 +23,36 @@ class PermissionManager:
             JOIN yetkiler y ON ry.yetki_id = y.yetki_id
             WHERE k.kullanici_id = %s
         """, (self.user_id,)) or []
-
         return {p['yetki_kodu'] for p in perms}
 
     def has_permission(self, permission_code):
-        """Yetki kontrolü"""
         return permission_code in self.permissions
 
     def can_manage_all_departments(self):
-        """Tüm bölümlere erişim var mı?"""
         return self.has_permission('TUM_BOLUM_ERISIM')
 
 
 class MainDashboard(QMainWindow):
-
     def __init__(self, user):
         super().__init__()
         self.user = user
         self.permission_manager = PermissionManager(user['id'])
         self.content_layout = None
+        self.active_menu_button = None
         self.init_ui()
 
     def init_ui(self):
-        """Arayüzü oluştur"""
         self.setWindowTitle(f"Sınav Takvimi Sistemi - {self.user['ad_soyad']}")
-        self.setMinimumSize(1300, 850)
+        self.setMinimumSize(1400, 900)
 
-        # Ana widget
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        # Ana layout
         main_layout = QHBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Sol panel
         sidebar = self.create_sidebar()
-
-        # Sağ panel
         content_area = self.create_content_area()
 
         main_layout.addWidget(sidebar)
@@ -79,16 +60,20 @@ class MainDashboard(QMainWindow):
 
         central_widget.setLayout(main_layout)
 
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #f5f7fa;
+            }
+        """)
+
     def create_content_area(self):
-        """İçerik alanı"""
         self.content_frame = QFrame()
-        self.content_frame.setStyleSheet("background-color: #f8f9fa;")
+        self.content_frame.setStyleSheet("background-color: #f5f7fa;")
 
         self.content_layout = QVBoxLayout()
         self.content_layout.setContentsMargins(0, 0, 0, 0)
         self.content_layout.setSpacing(0)
 
-        # Varsayılan olarak dashboard içeriğini göster
         self.show_dashboard_content()
 
         self.content_frame.setLayout(self.content_layout)
@@ -104,22 +89,37 @@ class MainDashboard(QMainWindow):
                 widget.setParent(None)
 
     def show_dashboard_content(self):
-        """Dashboard varsayılan içeriği yükle"""
         self.clear_content_area()
-        top_bar = self.create_top_bar()
-        stats = self.create_statistics_section()
-        self.content_layout.addWidget(top_bar)
-        self.content_layout.addWidget(stats)
-        self.content_layout.addStretch()
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("QScrollArea { border: none; background-color: #f5f7fa; }")
+
+        container = QWidget()
+        container_layout = QVBoxLayout()
+        container_layout.setContentsMargins(30, 30, 30, 30)
+        container_layout.setSpacing(25)
+
+        top_bar = self.create_modern_top_bar()
+        stats = self.create_modern_statistics()
+
+        container_layout.addWidget(top_bar)
+        container_layout.addWidget(stats)
+        container_layout.addStretch()
+
+        container.setLayout(container_layout)
+        scroll.setWidget(container)
+
+        self.content_layout.addWidget(scroll)
 
     def create_sidebar(self):
-        """Sol menü - Login ile aynı yeşil (#27ae60)"""
         sidebar = QFrame()
-        sidebar.setFixedWidth(300)
+        sidebar.setFixedWidth(260)
         sidebar.setStyleSheet("""
             QFrame {
-                background-color: rgba(39, 174, 96, 0.95);
-                border-right: none;
+                background-color: #27ae60;
+                border: none;
             }
         """)
 
@@ -127,34 +127,31 @@ class MainDashboard(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Kullanıcı bilgisi
         user_info = self.create_user_info_section()
         layout.addWidget(user_info)
 
-        # Menü başlığı
         menu_title = QLabel('MENÜ')
         menu_title.setStyleSheet("""
             QLabel {
-                color: white;
-                padding: 25px 20px 15px 20px;
-                font-size: 13px;
-                font-weight: bold;
+                color: rgba(255, 255, 255, 0.9);
+                padding: 30px 20px 15px 20px;
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 1px;
             }
         """)
         layout.addWidget(menu_title)
 
-        # Menü öğeleri
         for item in self.get_menu_items():
             btn = self.create_menu_button(item['text'], item['icon'], item['callback'])
             layout.addWidget(btn)
 
         layout.addStretch()
 
-        # Çıkış
         logout_btn = self.create_menu_button('Çıkış', '🚪', self.logout)
         logout_btn.setStyleSheet(logout_btn.styleSheet() + """
             QPushButton:hover {
-                background-color: rgba(231, 76, 60, 0.8) !important;
+                background-color: rgba(231, 76, 60, 0.9) !important;
             }
         """)
         layout.addWidget(logout_btn)
@@ -163,7 +160,6 @@ class MainDashboard(QMainWindow):
         return sidebar
 
     def get_menu_items(self):
-        """Yetkilere göre menü"""
         pm = self.permission_manager
         items = [{'text': 'Ana Sayfa', 'icon': '🏠', 'callback': self.show_dashboard}]
 
@@ -179,36 +175,41 @@ class MainDashboard(QMainWindow):
             items.append({'text': 'Sınav Programı', 'icon': '📅', 'callback': self.open_exam_scheduler})
         if pm.has_permission('OTURMA_PLAN'):
             items.append({'text': 'Oturma Planı', 'icon': '💺', 'callback': self.open_seating_plan})
-
-        items.append({'text': 'Raporlar', 'icon': '📊', 'callback': self.open_reports})
         return items
 
     def create_user_info_section(self):
-        """Kullanıcı bilgi kartı"""
         frame = QFrame()
         frame.setStyleSheet("""
             QFrame {
-                background-color: rgba(255, 255, 255, 0.98);
-                padding: 30px 20px;
-                margin: 20px;
-                border-radius: 20px;
+                background-color: rgba(255, 255, 255, 0.15);
+                padding: 25px 15px;
+                margin: 20px 15px;
+                border-radius: 15px;
             }
         """)
 
         layout = QVBoxLayout()
-        layout.setSpacing(10)
+        layout.setSpacing(8)
 
         avatar = QLabel('👤')
         avatar.setAlignment(Qt.AlignCenter)
-        avatar.setStyleSheet("font-size: 64px;")
+        avatar.setStyleSheet("font-size: 50px;")
 
         name = QLabel(self.user['ad_soyad'])
         name.setAlignment(Qt.AlignCenter)
-        name.setStyleSheet("color:#27ae60; font-size:18px; font-weight:bold;")
+        name.setStyleSheet("""
+            color: white;
+            font-size: 15px;
+            font-weight: 600;
+        """)
+        name.setWordWrap(True)
 
         role = QLabel(self.user['rol'])
         role.setAlignment(Qt.AlignCenter)
-        role.setStyleSheet("color:#2c3e50; font-size:14px;")
+        role.setStyleSheet("""
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 12px;
+        """)
 
         layout.addWidget(avatar)
         layout.addWidget(name)
@@ -217,7 +218,10 @@ class MainDashboard(QMainWindow):
         if self.user['bolum_adi']:
             dept = QLabel(self.user['bolum_adi'])
             dept.setAlignment(Qt.AlignCenter)
-            dept.setStyleSheet("color:#7f8c8d; font-size:12px;")
+            dept.setStyleSheet("""
+                color: rgba(255, 255, 255, 0.7);
+                font-size: 11px;
+            """)
             layout.addWidget(dept)
 
         frame.setLayout(layout)
@@ -226,58 +230,112 @@ class MainDashboard(QMainWindow):
     def create_menu_button(self, text, icon, callback):
         btn = QPushButton(f"{icon}  {text}")
         btn.setCursor(Qt.PointingHandCursor)
-        btn.clicked.connect(callback)
+        btn.clicked.connect(lambda: self.handle_menu_click(btn, callback))
         btn.setStyleSheet("""
             QPushButton {
                 text-align: left;
-                padding: 16px 22px;
+                padding: 15px 20px;
                 border: none;
-                color: white;
-                font-size: 15px;
+                color: rgba(255, 255, 255, 0.95);
+                font-size: 14px;
                 background-color: transparent;
+                border-left: 3px solid transparent;
             }
             QPushButton:hover {
-                background-color: rgba(34,153,84,0.7);
-            }
-            QPushButton:pressed {
-                background-color: rgba(30,132,73,0.9);
+                background-color: rgba(255, 255, 255, 0.1);
+                border-left: 3px solid white;
             }
         """)
         return btn
 
-    def create_top_bar(self):
+    def handle_menu_click(self, button, callback):
+        if self.active_menu_button:
+            self.active_menu_button.setStyleSheet("""
+                QPushButton {
+                    text-align: left;
+                    padding: 15px 20px;
+                    border: none;
+                    color: rgba(255, 255, 255, 0.95);
+                    font-size: 14px;
+                    background-color: transparent;
+                    border-left: 3px solid transparent;
+                }
+                QPushButton:hover {
+                    background-color: rgba(255, 255, 255, 0.1);
+                    border-left: 3px solid white;
+                }
+            """)
+
+        button.setStyleSheet("""
+            QPushButton {
+                text-align: left;
+                padding: 15px 20px;
+                border: none;
+                color: white;
+                font-size: 14px;
+                background-color: rgba(255, 255, 255, 0.15);
+                border-left: 3px solid white;
+                font-weight: 600;
+            }
+        """)
+
+        self.active_menu_button = button
+        callback()
+
+    def create_modern_top_bar(self):
         bar = QFrame()
         bar.setStyleSheet("""
             QFrame {
                 background-color: white;
-                border-bottom: 3px solid #27ae60;
-                margin: 20px;
-                border-radius: 15px 15px 0 0;
+                border-radius: 15px;
+                padding: 25px 30px;
             }
         """)
-        layout = QHBoxLayout()
-        layout.setContentsMargins(35, 25, 35, 25)
 
-        welcome = QLabel(f'Hoş Geldiniz, {self.user["ad_soyad"]}')
-        welcome.setStyleSheet("color:#27ae60; font-size:26px; font-weight:bold;")
+        layout = QVBoxLayout()
+        layout.setSpacing(10)
 
-        role_badge = QLabel(f'🎓 {self.user["rol"]}')
+        title_row = QHBoxLayout()
+
+        welcome = QLabel(f'{self.user["ad_soyad"]}')
+        welcome.setStyleSheet("""
+            color: #2c3e50;
+            font-size: 28px;
+            font-weight: 700;
+        """)
+        welcome.setWordWrap(True)
+
+        role_badge = QLabel(f'{self.user["rol"]}')
         role_badge.setStyleSheet("""
-            color:white; background-color:#27ae60;
-            padding:10px 20px; border-radius:12px; font-weight:bold;
+            color: white;
+            background-color: #27ae60;
+            padding: 8px 18px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
         """)
 
-        layout.addWidget(welcome)
-        layout.addStretch()
-        layout.addWidget(role_badge)
+        title_row.addWidget(welcome, stretch=1)
+        title_row.addWidget(role_badge)
+
+        subtitle = QLabel('Sınav Takvimi Yönetim Sistemi')
+        subtitle.setStyleSheet("""
+            color: #7f8c8d;
+            font-size: 14px;
+        """)
+        subtitle.setWordWrap(True)
+
+        layout.addLayout(title_row)
+        layout.addWidget(subtitle)
+
         bar.setLayout(layout)
         return bar
 
-    def create_statistics_section(self):
-        frame = QFrame()
+    def create_modern_statistics(self):
+        container = QWidget()
         layout = QGridLayout()
         layout.setSpacing(20)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         pm = self.permission_manager
         if pm.can_manage_all_departments():
@@ -296,41 +354,64 @@ class MainDashboard(QMainWindow):
             ]
 
         for i, (title, value, color, icon) in enumerate(stats):
-            card = self.create_stat_card(title, value, color, icon)
+            card = self.create_modern_stat_card(title, value, color, icon)
             layout.addWidget(card, i // 2, i % 2)
 
-        frame.setLayout(layout)
-        return frame
+        container.setLayout(layout)
+        return container
 
-    def create_stat_card(self, title, value, color, icon):
+    def create_modern_stat_card(self, title, value, color, icon):
         card = QFrame()
         card.setStyleSheet(f"""
             QFrame {{
                 background-color: white;
-                border-radius: 20px;
-                border-left: 5px solid {color};
+                border-radius: 15px;
+                border: none;
+            }}
+            QFrame:hover {{
+                background-color: #fafbfc;
             }}
         """)
-        card.setFixedHeight(140)
+
         layout = QVBoxLayout()
         layout.setContentsMargins(25, 20, 25, 20)
+        layout.setSpacing(15)
 
-        top = QHBoxLayout()
-        top.addWidget(QLabel(icon))
-        title_lbl = QLabel(title)
-        title_lbl.setStyleSheet("color:#2c3e50; font-size:15px; font-weight:600;")
-        top.addWidget(title_lbl)
-        top.addStretch()
+        top_row = QHBoxLayout()
 
-        val = QLabel(str(value))
-        val.setStyleSheet(f"color:{color}; font-size:40px; font-weight:bold;")
+        icon_label = QLabel(icon)
+        icon_label.setStyleSheet(f"""
+            font-size: 32px;
+            background-color: {color};
+            padding: 10px;
+            border-radius: 12px;
+        """)
+        icon_label.setFixedSize(55, 55)
+        icon_label.setAlignment(Qt.AlignCenter)
 
-        layout.addLayout(top)
-        layout.addWidget(val)
+        top_row.addWidget(icon_label)
+        top_row.addStretch()
+
+        title_label = QLabel(title)
+        title_label.setStyleSheet("""
+            color: #7f8c8d;
+            font-size: 13px;
+            font-weight: 500;
+        """)
+
+        value_label = QLabel(str(value))
+        value_label.setStyleSheet(f"""
+            color: {color};
+            font-size: 36px;
+            font-weight: 700;
+        """)
+
+        layout.addLayout(top_row)
+        layout.addWidget(title_label)
+        layout.addWidget(value_label)
+
         card.setLayout(layout)
         return card
-
-    # ============ İSTATİSTİKLER ============
 
     def get_department_count(self):
         r = Database.execute_query("SELECT COUNT(*) as count FROM bolumler WHERE aktif = true")
@@ -370,8 +451,6 @@ class MainDashboard(QMainWindow):
             r = Database.execute_query("SELECT COUNT(*) as count FROM sinavlar")
         return r[0]['count'] if r else 0
 
-    # ============ MENÜLER ============
-
     def show_dashboard(self):
         self.show_dashboard_content()
 
@@ -379,7 +458,6 @@ class MainDashboard(QMainWindow):
         if not self.permission_manager.has_permission('KULLANICI_EKLE'):
             self.show_permission_error()
             return
-
         from student_system.views.user_management import UserManagement
         self.clear_content_area()
         self.cm_widget = UserManagement(self.user)
@@ -389,7 +467,6 @@ class MainDashboard(QMainWindow):
         if not self.permission_manager.has_permission('DERSLIK_YONET'):
             self.show_permission_error()
             return
-
         from student_system.views.classroom_management import ClassroomManagement
         self.clear_content_area()
         self.cm_widget = ClassroomManagement(self.user, self.permission_manager, parent=self)
@@ -399,7 +476,6 @@ class MainDashboard(QMainWindow):
         if not self.permission_manager.has_permission('DERS_YUKLE'):
             self.show_permission_error()
             return
-
         from student_system.views.lesson_list import LessonListUploader
         self.clear_content_area()
         uploader = LessonListUploader(self.user, self)
@@ -416,7 +492,8 @@ class MainDashboard(QMainWindow):
 
     def open_exam_scheduler(self):
         if not self.permission_manager.has_permission('SINAV_OLUSTUR'):
-            self.show_permission_error(); return
+            self.show_permission_error()
+            return
         from student_system.views.exam_scheduler import ExamScheduler
         self.clear_content_area()
         uploader = ExamScheduler(self.user, self)
@@ -424,23 +501,21 @@ class MainDashboard(QMainWindow):
 
     def open_seating_plan(self):
         if not self.permission_manager.has_permission('OTURMA_PLAN'):
-            self.show_permission_error();
+            self.show_permission_error()
             return
         try:
-            from student_system.views.seat_plan import SeatPlanView  # burada import
+            from student_system.views.seat_plan import SeatPlanView
             self.clear_content_area()
             self.seatplan_widget = SeatPlanView(self.user, self.permission_manager, parent=self)
             self.content_layout.addWidget(self.seatplan_widget)
         except Exception as e:
             QMessageBox.critical(self, "Oturma Planı",
-                                 f"Ekran yüklenirken hata:\n\n{e}\n\n{traceback.format_exc()}")
+                               f"Ekran yüklenirken hata:\n\n{e}\n\n{traceback.format_exc()}")
 
-    def open_reports(self):
-        QMessageBox.information(self, 'Raporlar', 'Rapor ekranı hazırlanıyor...')
 
     def logout(self):
         reply = QMessageBox.question(self, 'Çıkış', 'Çıkış yapmak istediğinize emin misiniz?',
-                                     QMessageBox.Yes | QMessageBox.No)
+                                    QMessageBox.Yes | QMessageBox.No)
         if reply == QMessageBox.Yes:
             self.close()
             from student_system.views.login_window import LoginWindow
@@ -454,39 +529,24 @@ class MainDashboard(QMainWindow):
         msg.setText('Bu işlem için yetkiniz bulunmamaktadır.')
         msg.setStandardButtons(QMessageBox.Ok)
         msg.setStyleSheet("""
-            QMessageBox QLabel { color:#2c3e50; font-size:13px; min-width:300px; }
-            QPushButton { background-color:#f39c12; color:white; border:none; border-radius:5px; padding:8px 20px; }
-            QPushButton:hover { background-color:#e67e22; }
+            QMessageBox {
+                background-color: white;
+            }
+            QMessageBox QLabel {
+                color: #2c3e50;
+                font-size: 13px;
+                min-width: 300px;
+            }
+            QPushButton {
+                background-color: #27ae60;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 10px 25px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #229954;
+            }
         """)
         msg.exec_()
-
-if __name__ == '__main__':
-    import os
-    from PyQt5.QtCore import Qt
-    from PyQt5.QtWidgets import QApplication, QStyleFactory
-    from PyQt5.QtGui import QFont
-
-    # --- Ekran ve stil sabitleme ---
-    os.environ.setdefault("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
-    os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
-    os.environ.setdefault("QT_SCALE_FACTOR", "1")
-
-    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-
-    app = QApplication(sys.argv)
-    app.setStyle(QStyleFactory.create("Fusion"))  # Fusion teması → daha kararlı
-    app.setFont(QFont('Segoe UI', 10))
-
-    # --- Test kullanıcısı ---
-    test_user = {
-        'id': 1,
-        'ad_soyad': 'Sistem Admin',
-        'bolum_id': None,
-        'bolum_adi': None,
-        'rol': 'Admin'
-    }
-
-    # --- Ana pencereyi başlat ---
-    window = MainDashboard(test_user)
-    window.show()
-    sys.exit(app.exec_())

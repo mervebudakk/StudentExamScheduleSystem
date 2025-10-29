@@ -1,4 +1,3 @@
-# student_system/views/classroom_management.py
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QLineEdit, QComboBox, QSpinBox,
@@ -21,163 +20,263 @@ class ClassroomManagement(QWidget):
         self.form_visible = False
 
         self.setWindowTitle("Derslik Yönetimi")
-        self.setMinimumSize(1100, 700)
+        self.setMinimumSize(1200, 750)
 
         self.departments = self._fetch_departments()
         self._build_ui()
         self._load_table()
 
-    # ---------- UI ----------
     def _build_ui(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(20, 20, 20, 20)
-        root.setSpacing(14)
+        root.setContentsMargins(25, 25, 25, 25)
+        root.setSpacing(20)
 
-        # Üst Başlık (mor gradyan)
         header = QFrame()
         header.setStyleSheet("""
             QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #8e44ad, stop:1 #9b59b6);
-                border-radius: 12px;
+                background: #ffffff;
+                border: none;
+                border-radius: 0px;
             }
         """)
-        hl = QHBoxLayout(header);
-        hl.setContentsMargins(18, 14, 18, 14)
-        title = QLabel("🏫  Derslik Yönetimi")
-        title.setStyleSheet("color:white; font-size:20px; font-weight:700;")
-        hl.addWidget(title);
+        hl = QHBoxLayout(header)
+        hl.setContentsMargins(0, 0, 0, 20)
+
+        title = QLabel("Derslik Yönetimi")
+        title.setStyleSheet("color: #2c3e50; font-size: 28px; font-weight: 700; border: none;")
+        hl.addWidget(title)
         hl.addStretch()
 
-        btn_new_top = QPushButton("➕ Yeni Derslik Ekle")
+        btn_new_top = QPushButton("+ Yeni Derslik Ekle")
         btn_new_top.clicked.connect(self._start_create)
         btn_new_top.setCursor(Qt.PointingHandCursor)
+        btn_new_top.setFixedHeight(45)
         btn_new_top.setStyleSheet("""
-                    QPushButton {
-                        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                            stop:0 #e67e22, stop:1 #d35400);
-                        color:white; border:none; border-radius:10px;
-                        padding:10px 14px; font-weight:600;
-                    }
-                    QPushButton:hover {
-                        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                            stop:0 #d35400, stop:1 #ba4a00);
-                    }
-                """)
-        hl.addWidget(btn_new_top)
+            QPushButton {
+                background: #5d6dfa;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 0px 24px;
+                font-size: 14px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background: #4c5de8;
+            }
+            QPushButton:pressed {
+                background: #3b4cd7;
+            }
+        """)
         root.addWidget(header)
 
-        # Araç Çubuğu
         toolbar_frame = QFrame()
         toolbar_frame.setStyleSheet("""
             QFrame {
-                background:#ffffff; border:2px solid #ecf0f1;
-                border-radius:12px;
-            }
-            QLineEdit {
-                border:2px solid #bdc3c7; border-radius:8px; padding:8px 10px;
-            }
-            QComboBox {
-                border:2px solid #bdc3c7; border-radius:8px; padding:6px 10px;
-                background:white;
+                background: #ffffff;
+                border: 1px solid #e1e8ed;
+                border-radius: 12px;
             }
         """)
         toolbar = QHBoxLayout(toolbar_frame)
-        toolbar.setContentsMargins(14, 12, 14, 12)
-        self.search = QLineEdit();
-        self.search.setPlaceholderText("Kod/Ad ara…")
+        toolbar.setContentsMargins(20, 16, 20, 16)
+        toolbar.setSpacing(12)
+
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Derslik ara...")
+        self.search.setFixedHeight(42)
         self.search.textChanged.connect(self._load_table)
+        self.search.setStyleSheet("""
+            QLineEdit {
+                border: 1px solid #e1e8ed;
+                border-radius: 8px;
+                padding: 0px 16px;
+                font-size: 14px;
+                background: #f8f9fa;
+                color: #2c3e50;
+            }
+            QLineEdit:focus {
+                border: 1px solid #5d6dfa;
+                background: #ffffff;
+            }
+        """)
 
         self.filter_dept = QComboBox()
+        self.filter_dept.setFixedHeight(42)
         self._fill_dept_combo(self.filter_dept, include_all=True)
         self.filter_dept.currentIndexChanged.connect(self._load_table)
-
-        btn_refresh = QPushButton("↻ Yenile")
-        btn_refresh.clicked.connect(self._load_table)
-        btn_refresh.setCursor(Qt.PointingHandCursor)
-        btn_refresh.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #3498db, stop:1 #2980b9);
-                color:white; border:none; border-radius:8px;
-                padding:8px 12px; font-weight:600;
+        self.filter_dept.setStyleSheet("""
+            QComboBox {
+                border: 1px solid #e1e8ed;
+                border-radius: 8px;
+                padding: 0px 16px;
+                font-size: 14px;
+                background: #f8f9fa;
+                color: #2c3e50;
+                min-width: 200px;
             }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #2980b9, stop:1 #21618c);
+            QComboBox:focus {
+                border: 1px solid #5d6dfa;
+                background: #ffffff;
+            }
+            QComboBox::drop-down {
+                border: none;
+                padding-right: 12px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 6px solid #7f8c8d;
+                margin-right: 8px;
+            }
+            QComboBox QAbstractItemView {
+                border: 1px solid #e1e8ed;
+                border-radius: 8px;
+                background: white;
+                selection-background-color: #f0f3ff;
+                selection-color: #5d6dfa;
+                padding: 4px;
             }
         """)
 
         toolbar.addWidget(self.search, 3)
         toolbar.addWidget(self.filter_dept, 2)
         toolbar.addStretch()
-        toolbar.addWidget(btn_refresh)
         root.addWidget(toolbar_frame)
 
-        # Tablo
         table_frame = QFrame()
         table_frame.setStyleSheet("""
-            QFrame { background:white; border:2px solid #ecf0f1; border-radius:12px; }
-            QTableWidget {
-                background:white; border: none; gridline-color:#ecf0f1;
-                alternate-background-color:#f8f9fa; font-size:13px;
+            QFrame { 
+                background: white; 
+                border: 1px solid #e1e8ed; 
+                border-radius: 12px;
             }
-            QHeaderView::section {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #8e44ad, stop:1 #9b59b6);
-                color: white; padding:10px; border:none; font-weight:700;
-            }
-            QTableWidget::item:selected {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #8e44ad, stop:1 #9b59b6);
-                color: white;
-            }
-            QToolButton {
-                border:none; padding:4px 6px; color:#2c3e50; font-weight:600;
-            }
-            QToolButton:hover { color:#8e44ad; }
         """)
-        tv = QVBoxLayout(table_frame);
-        tv.setContentsMargins(10, 10, 10, 10)
+        tv = QVBoxLayout(table_frame)
+        tv.setContentsMargins(1, 1, 1, 1)
+
         self.table = QTableWidget(0, 8)
         self.table.setAlternatingRowColors(True)
         self.table.setHorizontalHeaderLabels(
             ["Kod", "Ad", "Kapasite", "Enine", "Boyuna", "Yapı", "Bölüm", "İşlemler"]
         )
-        self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.horizontalHeader().setStretchLastSection(False)  # StretchLastSection'ı kapatalım
+
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(
+            QHeaderView.Interactive)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(6, QHeaderView.Stretch)
+        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
+
+        header = self.table.horizontalHeader()
+
+        header.setSectionResizeMode(QHeaderView.Interactive)
+
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(6, QHeaderView.Stretch)
+
+        self.table.setColumnWidth(7, 240)
+        self.table.verticalHeader().setDefaultSectionSize(65)
         self.table.setSelectionBehavior(self.table.SelectRows)
-        self.table.setEditTriggers(self.table.NoEditTriggers)
         self.table.itemDoubleClicked.connect(self._open_detail_by_item)
+        self.table.setStyleSheet("""
+            QTableWidget {
+                background: white;
+                border: none;
+                gridline-color: #f0f3f5;
+                alternate-background-color: #f8f9fa;
+                font-size: 14px;
+                border-radius: 12px;
+            }
+            QHeaderView::section {
+                background: #f8f9fa;
+                color: #5a6c7d;
+                padding: 12px;
+                border: none;
+                border-bottom: 2px solid #e1e8ed;
+                font-weight: 600;
+                font-size: 13px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            QTableWidget::item {
+                padding: 12px 8px;
+                border-bottom: 1px solid #f0f3f5;
+                color: #2c3e50;
+            }
+            QTableWidget::item:selected {
+                background: #f0f3ff;
+                color: #5d6dfa;
+            }
+            QToolButton {
+                border: none;
+                padding: 6px 12px;
+                color: #5a6c7d;
+                font-weight: 500;
+                font-size: 13px;
+                border-radius: 6px;
+                margin: 2px;
+            }
+            QToolButton:hover {
+                background: #f0f3ff;
+                color: #5d6dfa;
+            }
+        """)
 
         tv.addWidget(self.table)
         root.addWidget(table_frame)
 
-        # Form kartı
-        self.form_box = QFrame();
+        self.form_box = QFrame()
         self.form_box.setVisible(False)
         self.form_box.setStyleSheet("""
-            QFrame { background:white; border:2px solid #ecf0f1; border-radius:12px; }
+            QFrame { 
+                background: white; 
+                border: 1px solid #e1e8ed; 
+                border-radius: 12px;
+            }
             QLineEdit, QSpinBox, QComboBox {
-                border:2px solid #bdc3c7; border-radius:8px; padding:6px 10px;
-                background:white;
+                border: 1px solid #e1e8ed;
+                border-radius: 8px;
+                padding: 10px 14px;
+                background: #f8f9fa;
+                font-size: 14px;
+                color: #2c3e50;
+            }
+            QLineEdit:focus, QSpinBox:focus, QComboBox:focus {
+                border: 1px solid #5d6dfa;
+                background: white;
+            }
+            QLabel {
+                font-size: 14px;
+                color: #5a6c7d;
+                font-weight: 500;
             }
         """)
-        fl = QFormLayout(self.form_box);
+        fl = QFormLayout(self.form_box)
         fl.setLabelAlignment(Qt.AlignRight)
-        fl.setContentsMargins(14, 12, 14, 12)
+        fl.setContentsMargins(24, 20, 24, 20)
+        fl.setSpacing(16)
 
         self.inp_code = QLineEdit()
+        self.inp_code.setFixedHeight(42)
         self.inp_name = QLineEdit()
-        self.inp_capacity = QSpinBox();
+        self.inp_name.setFixedHeight(42)
+        self.inp_capacity = QSpinBox()
+        self.inp_capacity.setFixedHeight(42)
         self.inp_capacity.setRange(1, 5000)
-        self.inp_enine = QSpinBox();
+        self.inp_enine = QSpinBox()
+        self.inp_enine.setFixedHeight(42)
         self.inp_enine.setRange(1, 200)
-        self.inp_boyuna = QSpinBox();
+        self.inp_boyuna = QSpinBox()
+        self.inp_boyuna.setFixedHeight(42)
         self.inp_boyuna.setRange(1, 200)
-        self.inp_yapi = QSpinBox();
+        self.inp_yapi = QSpinBox()
+        self.inp_yapi.setFixedHeight(42)
         self.inp_yapi.setRange(2, 4)
-        self.inp_dept = QComboBox();
+        self.inp_dept = QComboBox()
+        self.inp_dept.setFixedHeight(42)
         self._fill_dept_combo(self.inp_dept, include_all=False)
         if not self.pm.can_manage_all_departments():
             self._select_dept(self.inp_dept, self.user["bolum_id"])
@@ -192,47 +291,65 @@ class ClassroomManagement(QWidget):
         fl.addRow("Bölüm:", self.inp_dept)
         root.addWidget(self.form_box)
 
-        # Alt butonlar
         btns = QHBoxLayout()
-        self.btn_save = QPushButton("✅ Kaydet");
+        btns.setSpacing(12)
+
+        self.btn_save = QPushButton("Kaydet")
         self.btn_save.clicked.connect(self._save)
         self.btn_save.setCursor(Qt.PointingHandCursor)
+        self.btn_save.setFixedHeight(45)
         self.btn_save.setStyleSheet("""
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #27ae60, stop:1 #229954);
-                color:white; border:none; border-radius:10px;
-                padding:10px 16px; font-weight:700;
+                background: #10b981;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 0px 32px;
+                font-weight: 600;
+                font-size: 14px;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #229954, stop:1 #1e8449);
+                background: #059669;
+            }
+            QPushButton:pressed {
+                background: #047857;
             }
         """)
 
-        self.btn_cancel = QPushButton("↩️ Vazgeç");
+        self.btn_cancel = QPushButton("Vazgeç")
         self.btn_cancel.clicked.connect(self._cancel_form)
         self.btn_cancel.setCursor(Qt.PointingHandCursor)
+        self.btn_cancel.setFixedHeight(45)
         self.btn_cancel.setStyleSheet("""
             QPushButton {
-                background:#ecf0f1; color:#2c3e50; border:none; border-radius:10px;
-                padding:10px 16px; font-weight:700;
+                background: #f1f3f5;
+                color: #5a6c7d;
+                border: none;
+                border-radius: 8px;
+                padding: 0px 32px;
+                font-weight: 600;
+                font-size: 14px;
             }
-            QPushButton:hover { background:#e0e6ea; }
+            QPushButton:hover {
+                background: #e9ecef;
+            }
+            QPushButton:pressed {
+                background: #dee2e6;
+            }
         """)
 
-        btn_new_bottom = QPushButton("➕ Yeni Derslik Ekle")
+        btn_new_bottom = QPushButton("+ Yeni Derslik Ekle")
         btn_new_bottom.clicked.connect(self._start_create)
         btn_new_bottom.setCursor(Qt.PointingHandCursor)
+        btn_new_bottom.setFixedHeight(45)
         btn_new_bottom.setStyleSheet(btn_new_top.styleSheet())
 
-        btns.addWidget(self.btn_save);
+        btns.addWidget(self.btn_save)
         btns.addWidget(self.btn_cancel)
-        btns.addStretch();
+        btns.addStretch()
         btns.addWidget(btn_new_bottom)
         root.addLayout(btns)
 
-    # ---------- Data ----------
     def _fetch_departments(self):
         return Database.execute_query(
             "SELECT bolum_id AS id, bolum_adi AS ad FROM Bolumler WHERE aktif = TRUE ORDER BY bolum_adi"
@@ -251,7 +368,7 @@ class ClassroomManagement(QWidget):
     def _select_dept(self, combo: QComboBox, dept_id):
         for i in range(combo.count()):
             if combo.itemData(i) == dept_id:
-                combo.setCurrentIndex(i);
+                combo.setCurrentIndex(i)
                 break
 
     def _load_table(self):
@@ -266,30 +383,30 @@ class ClassroomManagement(QWidget):
                 params += [int(q), f"%{q}%"]
             else:
                 where.append("(LOWER(derslik_kodu) LIKE %s OR LOWER(derslik_adi) LIKE %s)")
-                like = f"%{q}%";
+                like = f"%{q}%"
                 params += [like, like]
 
         if dept_id:
-            where.append("bolum_id = %s");
+            where.append("bolum_id = %s")
             params.append(dept_id)
         elif not self.pm.can_manage_all_departments():
-            where.append("bolum_id = %s");
+            where.append("bolum_id = %s")
             params.append(self.user["bolum_id"])
 
-        # NOT: 'aktif' filtresi tamamen kaldırıldı
         sql = """
             SELECT derslik_id, derslik_kodu, derslik_adi, kapasite,
                    enine_sira_sayisi, boyuna_sira_sayisi, sira_yapisi, bolum_id
             FROM Derslikler
         """
-        if where: sql += " WHERE " + " AND ".join(where)
+        if where:
+            sql += " WHERE " + " AND ".join(where)
         sql += " ORDER BY derslik_kodu"
 
         rows = Database.execute_query(sql, tuple(params)) or []
 
         self.table.setRowCount(0)
         for r in rows:
-            row = self.table.rowCount();
+            row = self.table.rowCount()
             self.table.insertRow(row)
 
             self.table.setItem(row, 0, QTableWidgetItem(r["derslik_kodu"]))
@@ -302,20 +419,21 @@ class ClassroomManagement(QWidget):
 
             act = QWidget()
             h = QHBoxLayout(act)
-            h.setContentsMargins(0, 0, 0, 0)
+            h.setContentsMargins(4, 4, 4, 4)
+            h.setSpacing(4)
 
-            btn_view = QToolButton();
-            btn_view.setText("💺 Detay")
+            btn_view = QToolButton()
+            btn_view.setText("Detay")
             btn_view.setCursor(Qt.PointingHandCursor)
             btn_view.clicked.connect(lambda _, _id=r["derslik_id"]: self._open_detail(_id))
 
-            btn_edit = QToolButton();
-            btn_edit.setText("✏️ Düzenle")
+            btn_edit = QToolButton()
+            btn_edit.setText("Düzenle")
             btn_edit.setCursor(Qt.PointingHandCursor)
             btn_edit.clicked.connect(lambda _, _id=r["derslik_id"]: self._start_edit(_id))
 
-            btn_del = QToolButton();
-            btn_del.setText("🗑️ Sil")
+            btn_del = QToolButton()
+            btn_del.setText("Sil")
             btn_del.setCursor(Qt.PointingHandCursor)
             btn_del.clicked.connect(lambda _, _id=r["derslik_id"]: self._delete_by_id(_id))
 
@@ -330,10 +448,10 @@ class ClassroomManagement(QWidget):
 
     def _dept_name(self, dept_id):
         for d in self.departments:
-            if d["id"] == dept_id: return d["ad"]
+            if d["id"] == dept_id:
+                return d["ad"]
         return "-"
 
-    # ---------- Form akışları ----------
     def _start_create(self):
         self.current_id = None
         self._show_form()
@@ -346,7 +464,7 @@ class ClassroomManagement(QWidget):
                FROM Derslikler WHERE derslik_id=%s""", (derslik_id,)
         )
         if not r:
-            QMessageBox.warning(self, "Bulunamadı", "Kayıt bulunamadı.");
+            QMessageBox.warning(self, "Bulunamadı", "Kayıt bulunamadı.")
             return
 
         row = r[0]
@@ -373,16 +491,15 @@ class ClassroomManagement(QWidget):
             self._clear_form_defaults()
 
     def _clear_form_defaults(self):
-        self.inp_code.clear();
+        self.inp_code.clear()
         self.inp_name.clear()
-        self.inp_capacity.setValue(30);
+        self.inp_capacity.setValue(30)
         self.inp_enine.setValue(7)
-        self.inp_boyuna.setValue(9);
+        self.inp_boyuna.setValue(9)
         self.inp_yapi.setValue(3)
         if self.pm.can_manage_all_departments() and self.inp_dept.count() > 0:
             self.inp_dept.setCurrentIndex(0)
 
-    # ---------- Actions ----------
     def _validate(self):
         if not self.inp_code.text().strip():
             return False, "Derslik kodu boş olamaz."
@@ -399,7 +516,7 @@ class ClassroomManagement(QWidget):
     def _save(self):
         ok, msg = self._validate()
         if not ok:
-            QMessageBox.warning(self, "Uyarı", msg);
+            QMessageBox.warning(self, "Uyarı", msg)
             return
 
         dept_id = self.inp_dept.currentData()
@@ -437,8 +554,6 @@ class ClassroomManagement(QWidget):
                 self.current_id
             ))
             QMessageBox.information(self, "Bilgi", "Derslik güncellendi.")
-
-        # <<<--- BURADAN HATALI KAPASİTE HESAPLAMA SORGUSU KALDIRILDI --->>>
 
         self._load_table()
 

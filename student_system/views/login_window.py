@@ -163,7 +163,7 @@ class LoginWindow(QMainWindow):
         """)
 
         email_container = self.create_input_field(
-            '📧  E-posta Adresi',
+            'E-posta Adresi',
             'admin@kocaeli.edu.tr',
             is_password=False
         )
@@ -186,9 +186,8 @@ class LoginWindow(QMainWindow):
 
         self.email_input.textChanged.connect(update_completion)
 
-        # Şifre alanı
         password_container = self.create_input_field(
-            '🔒  Şifre',
+            'Şifre',
             'Şifrenizi girin',
             is_password=True
         )
@@ -341,7 +340,7 @@ class LoginWindow(QMainWindow):
             from student_system.views.main_dashboard import MainDashboard
 
             self.main_dashboard = MainDashboard(user)
-            self.main_dashboard.show()
+            self.main_dashboard.showMaximized()
             self.close()
 
         except Exception as e:

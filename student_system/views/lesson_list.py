@@ -3,7 +3,7 @@ import unicodedata
 import pandas as pd
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox, QTableWidget, \
-    QTableWidgetItem, QTextEdit, QHeaderView, QFrame
+    QTableWidgetItem, QTextEdit, QHeaderView, QFrame, QHBoxLayout
 from student_system.core.database import Database
 
 HEADER_SYNONYMS = {
@@ -46,32 +46,67 @@ class LessonListUploader(QWidget):
     def __init__(self, user, parent=None):
         super().__init__(parent)
         self.user = user
+        self.setMinimumSize(1200, 750)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setContentsMargins(25, 25, 25, 25)
         layout.setSpacing(20)
 
-        title_frame = QFrame()
-        title_frame.setStyleSheet("""
+        header = QFrame()
+        header.setStyleSheet("""
             QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #8e44ad, stop:1 #9b59b6);
-                border-radius: 12px;
-                padding: 15px;
+                background: #ffffff;
+                border: none;
+                border-radius: 0px;
             }
         """)
-        title_layout = QVBoxLayout(title_frame)
+        hl = QHBoxLayout(header)
+        hl.setContentsMargins(0, 0, 0, 20)
 
-        title = QLabel(f"📚 {self.user['bolum_adi']} - Ders Listesi")
-        title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("font-size: 22px; font-weight: bold; color: white; background: transparent;")
-        title_layout.addWidget(title)
+        title = QLabel(f"{self.user['bolum_adi']} - Ders Listesi İşlemleri")
+        title.setStyleSheet("color: #2c3e50; font-size: 28px; font-weight: 700; border: none;")
+        hl.addWidget(title)
+        hl.addStretch()
 
-        layout.addWidget(title_frame)
+        self.upload_btn = QPushButton("📁 Excel Dosyası Yükle")
+        self.upload_btn.setCursor(Qt.PointingHandCursor)
+        self.upload_btn.clicked.connect(self.upload_excel)
+        self.upload_btn.setFixedHeight(45)
+        self.upload_btn.setStyleSheet("""
+            QPushButton {
+                background: #5d6dfa;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 0px 24px;
+                font-size: 14px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background: #4c5de8;
+            }
+            QPushButton:pressed {
+                background: #3b4cd7;
+            }
+        """)
+        hl.addWidget(self.upload_btn)
 
-        table_label = QLabel("📘 Kayıtlı Dersler")
-        table_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50; margin-top: 10px;")
+        layout.addWidget(header)
+
+        table_label = QLabel("Kayıtlı Dersler")
+        table_label.setStyleSheet("font-size: 16px; font-weight: 600; color: #5a6c7d; margin-top: 4px;")
         layout.addWidget(table_label)
+
+        table_frame = QFrame()
+        table_frame.setStyleSheet("""
+            QFrame { 
+                background: white; 
+                border: 1px solid #e1e8ed; 
+                border-radius: 12px;
+            }
+        """)
+        tv = QVBoxLayout(table_frame)
+        tv.setContentsMargins(1, 1, 1, 1)
 
         self.lesson_table = QTableWidget()
         self.lesson_table.setColumnCount(2)
@@ -79,82 +114,73 @@ class LessonListUploader(QWidget):
         self.lesson_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.lesson_table.setAlternatingRowColors(True)
         self.lesson_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.lesson_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.lesson_table.cellClicked.connect(self.show_students_for_lesson)
         self.lesson_table.setStyleSheet("""
             QTableWidget {
-                background-color: white;
-                border: 2px solid #bdc3c7;
-                border-radius: 10px;
-                gridline-color: #ecf0f1;
+                background: white;
+                border: none;
+                gridline-color: #f0f3f5;
+                alternate-background-color: #f8f9fa;
+                font-size: 14px;
+                border-radius: 12px;
+            }
+            QHeaderView::section {
+                background: #f8f9fa;
+                color: #5a6c7d;
+                padding: 12px;
+                border: none;
+                border-bottom: 2px solid #e1e8ed;
+                font-weight: 600;
                 font-size: 13px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
             }
             QTableWidget::item {
-                padding: 8px;
+                padding: 12px 8px;
+                border-bottom: 1px solid #f0f3f5;
                 color: #2c3e50;
             }
             QTableWidget::item:selected {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #8e44ad, stop:1 #9b59b6);
-                color: white;
+                background: #f0f3ff;
+                color: #5d6dfa;
             }
-            QHeaderView::section {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #8e44ad, stop:1 #9b59b6);
-                color: white;
-                padding: 10px;
-                border: none;
-                font-weight: bold;
-                font-size: 13px;
-            }
-            QTableWidget::item:alternate {
-                background-color: #f8f9fa;
+            QTableWidget::item:focus {
+                outline: none; 
             }
         """)
-        layout.addWidget(self.lesson_table)
+        tv.addWidget(self.lesson_table)
+        layout.addWidget(table_frame)
 
-        student_label = QLabel("👨‍🎓 Derse Kayıtlı Öğrenciler")
-        student_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50; margin-top: 10px;")
+        student_label = QLabel("Derse Kayıtlı Öğrenciler")
+        student_label.setStyleSheet("font-size: 16px; font-weight: 600; color: #5a6c7d; margin-top: 8px;")
         layout.addWidget(student_label)
+
+        info_frame = QFrame()
+        info_frame.setStyleSheet("""
+            QFrame { 
+                background: white; 
+                border: 1px solid #e1e8ed; 
+                border-radius: 12px;
+            }
+        """)
+        info_layout = QVBoxLayout(info_frame)
+        info_layout.setContentsMargins(1, 1, 1, 1)
 
         self.student_info = QTextEdit()
         self.student_info.setReadOnly(True)
-        self.student_info.setMaximumHeight(200)
         self.student_info.setStyleSheet("""
             QTextEdit {
-                background-color: white;
-                border: 2px solid #bdc3c7;
-                border-radius: 10px;
-                padding: 15px;
+                background: white;
+                border: none;
+                border-radius: 12px;
+                padding: 16px;
                 font-size: 14px;
                 color: #2c3e50;
             }
         """)
-        layout.addWidget(self.student_info)
-
-        self.upload_btn = QPushButton("📁 Excel Dosyası Seç ve Yükle")
-        self.upload_btn.setCursor(Qt.PointingHandCursor)
-        self.upload_btn.clicked.connect(self.upload_excel)
-        self.upload_btn.setFixedHeight(50)
-        self.upload_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #e67e22, stop:1 #d35400);
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-size: 15px;
-                font-weight: bold;
-                margin-top: 10px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #d35400, stop:1 #ba4a00);
-            }
-            QPushButton:pressed {
-                background: #a04000;
-            }
-        """)
-        layout.addWidget(self.upload_btn)
+        info_layout.addWidget(self.student_info)
+        layout.addWidget(info_frame)
 
         self.setLayout(layout)
         self.load_lessons()
@@ -185,11 +211,11 @@ class LessonListUploader(QWidget):
 
         if not ogrenciler:
             html = f"""
-            <div style='padding: 15px; font-family: Segoe UI;'>
-                <div style='color: #e74c3c; font-size: 15px; font-weight: bold;'>
-                    📘 {ders_kodu} - {ders_adi}
+            <div style='padding: 8px; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif;'>
+                <div style='color: #5d6dfa; font-size: 15px; font-weight: 600; margin-bottom: 12px;'>
+                    {ders_kodu} - {ders_adi}
                 </div>
-                <div style='color: #95a5a6; font-size: 14px; margin-top: 10px;'>
+                <div style='color: #95a5a6; font-size: 14px;'>
                     Bu derse kayıtlı öğrenci bulunamadı.
                 </div>
             </div>
@@ -198,18 +224,18 @@ class LessonListUploader(QWidget):
             return
 
         html = f"""
-        <div style='padding: 15px; font-family: Segoe UI;'>
-            <div style='color: #8e44ad; font-size: 16px; font-weight: bold; margin-bottom: 12px;'>
-                📘 {ders_kodu} - {ders_adi}
+        <div style='padding: 8px; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif;'>
+            <div style='color: #5d6dfa; font-size: 15px; font-weight: 600; margin-bottom: 12px;'>
+                {ders_kodu} - {ders_adi}
             </div>
-            <div style='color: #2c3e50; font-size: 15px; font-weight: 600; margin-bottom: 8px;'>
-                👨‍🎓 Dersi Alan Öğrenciler:
+            <div style='color: #5a6c7d; font-size: 14px; font-weight: 500; margin-bottom: 10px;'>
+                Dersi Alan Öğrenciler:
             </div>
         """
 
         for o in ogrenciler:
             html += f"""
-            <div style='color: #34495e; font-size: 14px; margin-left: 20px; margin-bottom: 4px;'>
+            <div style='color: #2c3e50; font-size: 14px; margin-left: 16px; margin-bottom: 6px; line-height: 1.6;'>
                 • {o['ogrenci_no']} - {o['ad_soyad']}
             </div>
             """
@@ -339,31 +365,30 @@ class LessonListUploader(QWidget):
     def show_error(self, title, message):
         msg = QMessageBox(self)
         msg.setIcon(QMessageBox.Critical)
-        msg.setWindowTitle(f"❌ {title}")
+        msg.setWindowTitle(title)
         msg.setText(message)
         msg.setStandardButtons(QMessageBox.Ok)
         msg.setStyleSheet("""
             QMessageBox {
-                background-color: white;
+                background: white;
             }
             QMessageBox QLabel {
                 color: #2c3e50;
-                font-size: 13px;
-                min-width: 300px;
+                font-size: 14px;
+                min-width: 350px;
             }
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #e74c3c, stop:1 #c0392b);
+                background: #ef4444;
                 color: white;
                 border: none;
-                border-radius: 5px;
-                padding: 8px 20px;
-                font-weight: bold;
+                border-radius: 6px;
+                padding: 8px 24px;
+                font-weight: 600;
+                font-size: 13px;
                 min-width: 80px;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #c0392b, stop:1 #a93226);
+                background: #dc2626;
             }
         """)
         msg.exec_()
@@ -371,31 +396,30 @@ class LessonListUploader(QWidget):
     def show_success(self, title, message):
         msg = QMessageBox(self)
         msg.setIcon(QMessageBox.Information)
-        msg.setWindowTitle(f"✅ {title}")
+        msg.setWindowTitle(title)
         msg.setText(message)
         msg.setStandardButtons(QMessageBox.Ok)
         msg.setStyleSheet("""
             QMessageBox {
-                background-color: white;
+                background: white;
             }
             QMessageBox QLabel {
                 color: #2c3e50;
-                font-size: 13px;
-                min-width: 300px;
+                font-size: 14px;
+                min-width: 350px;
             }
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #27ae60, stop:1 #229954);
+                background: #10b981;
                 color: white;
                 border: none;
-                border-radius: 5px;
-                padding: 8px 20px;
-                font-weight: bold;
+                border-radius: 6px;
+                padding: 8px 24px;
+                font-weight: 600;
+                font-size: 13px;
                 min-width: 80px;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #229954, stop:1 #1e8449);
+                background: #059669;
             }
         """)
         msg.exec_()
@@ -403,31 +427,30 @@ class LessonListUploader(QWidget):
     def show_info(self, title, message):
         msg = QMessageBox(self)
         msg.setIcon(QMessageBox.Information)
-        msg.setWindowTitle(f"ℹ️ {title}")
+        msg.setWindowTitle(title)
         msg.setText(message)
         msg.setStandardButtons(QMessageBox.Ok)
         msg.setStyleSheet("""
             QMessageBox {
-                background-color: white;
+                background: white;
             }
             QMessageBox QLabel {
                 color: #2c3e50;
-                font-size: 13px;
-                min-width: 300px;
+                font-size: 14px;
+                min-width: 350px;
             }
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #3498db, stop:1 #2980b9);
+                background: #5d6dfa;
                 color: white;
                 border: none;
-                border-radius: 5px;
-                padding: 8px 20px;
-                font-weight: bold;
+                border-radius: 6px;
+                padding: 8px 24px;
+                font-weight: 600;
+                font-size: 13px;
                 min-width: 80px;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #2980b9, stop:1 #21618c);
+                background: #4c5de8;
             }
         """)
         msg.exec_()

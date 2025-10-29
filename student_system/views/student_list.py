@@ -7,6 +7,9 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFileDial
 from PyQt5.QtGui import QFont
 from student_system.core.database import Database
 
+# ... (HEADER_SYNONYMS, normalize, canonical_header fonksiyonları ve StudentUploadWorker sınıfı aynı kalabilir) ...
+# ... (Bu kısımları projenizden değiştirmeden alabilirsiniz) ...
+
 HEADER_SYNONYMS = {
     'ogrenci_no': {'ogrenci no', 'ogrencino', 'ogrenci_numarasi', 'numara', 'öğrenci no', 'öğrenci numarası', 'no'},
     'ad_soyad': {'ad soyad', 'ogrenci ad soyad', 'öğrenci adı', 'öğrenci isim', 'isim', 'ad', 'soyad'},
@@ -53,10 +56,10 @@ class StudentUploadWorker(QThread):
                 for s in self.students
             ]
             Database.execute_many("""
-                INSERT INTO ogrenciler (ogrenci_no, ad_soyad, bolum_id, sinif)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (ogrenci_no) DO NOTHING
-            """, ogrenci_values)
+                    INSERT INTO ogrenciler (ogrenci_no, ad_soyad, bolum_id, sinif)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (ogrenci_no) DO NOTHING
+                """, ogrenci_values)
 
             ogrenci_map = {
                 row["ogrenci_no"]: row["ogrenci_id"]
@@ -81,10 +84,10 @@ class StudentUploadWorker(QThread):
                     self.progress.emit(int(idx / len(self.students) * 100))
 
             Database.execute_many("""
-                INSERT INTO ogrencidersleri (ogrenci_id, ders_id)
-                VALUES (%s, %s)
-                ON CONFLICT DO NOTHING
-            """, relation_values)
+                    INSERT INTO ogrencidersleri (ogrenci_id, ders_id)
+                    VALUES (%s, %s)
+                    ON CONFLICT DO NOTHING
+                """, relation_values)
 
             inserted_students = len(ogrenci_values)
             inserted_relations = len(relation_values)
@@ -98,64 +101,97 @@ class StudentUploadWorker(QThread):
 class StudentListUploader(QWidget):
     def load_students(self):
         students = Database.execute_query("""
-            SELECT ogrenci_no, ad_soyad, sinif
-            FROM ogrenciler
-            WHERE bolum_id = %s
-            ORDER BY ogrenci_no
-        """, (self.user["bolum_id"],))
+                SELECT ogrenci_no, ad_soyad, sinif
+                FROM ogrenciler
+                WHERE bolum_id = %s
+                ORDER BY ogrenci_no
+            """, (self.user["bolum_id"],))
         self.table.setRowCount(len(students))
         for row, s in enumerate(students):
             self.table.setItem(row, 0, QTableWidgetItem(str(s["ogrenci_no"])))
             self.table.setItem(row, 1, QTableWidgetItem(s["ad_soyad"]))
             self.table.setItem(row, 2, QTableWidgetItem(str(s["sinif"])))
 
+    # DEĞİŞTİ: Orijinal search_student fonksiyonunun adı ve görevi değişti.
+    # Bu fonksiyon artık sadece arama kutusundan gelen metni alır ve detay gösterme fonksiyonunu çağırır.
     def search_student(self):
         ogr_no = self.search_box.text().strip()
+        self.show_student_details(ogr_no)  # YENİ EKLENDİ: Detay gösterme fonksiyonunu çağır
+
+    # YENİ EKLENDİ: Öğrenci detaylarını gösterme mantığı bu fonksiyona taşındı.
+    # Hem "Ara" butonu hem de tablodan tıklama bu fonksiyonu kullanacak.
+    def show_student_details(self, ogr_no):
         if not ogr_no:
             self.show_warning("Uyarı", "Lütfen bir öğrenci numarası girin.")
             return
 
         ogrenci = Database.execute_query("""
-            SELECT ogrenci_id, ad_soyad FROM ogrenciler
-            WHERE ogrenci_no = %s AND bolum_id = %s
-        """, (ogr_no, self.user["bolum_id"]))
+                SELECT ogrenci_id, ad_soyad FROM ogrenciler
+                WHERE ogrenci_no = %s AND bolum_id = %s
+            """, (ogr_no, self.user["bolum_id"]))
 
         if not ogrenci:
             self.result_area.setHtml(
-                "<div style='color: #e74c3c; font-size: 15px; padding: 15px;'>❌ Öğrenci bulunamadı.</div>")
+                "<div style='color: #e74c3c; font-size: 14px; padding: 12px;'>❌ Öğrenci bulunamadı.</div>")
             return
 
         ogr = ogrenci[0]
         dersler = Database.execute_query("""
-            SELECT d.ders_adi, d.ders_kodu
-            FROM ogrencidersleri od
-            JOIN dersler d ON od.ders_id = d.ders_id
-            WHERE od.ogrenci_id = %s
-            ORDER BY d.ders_kodu
-        """, (ogr["ogrenci_id"],))
+                SELECT d.ders_adi, d.ders_kodu
+                FROM ogrencidersleri od
+                JOIN dersler d ON od.ders_id = d.ders_id
+                WHERE od.ogrenci_id = %s
+                ORDER BY d.ders_kodu
+            """, (ogr["ogrenci_id"],))
 
         html = f"""
-        <div style='padding: 15px; font-family: Segoe UI;'>
-            <div style='color: #16a085; font-size: 16px; font-weight: bold; margin-bottom: 12px;'>
-                👤 Öğrenci: {ogr['ad_soyad']}
-            </div>
-            <div style='color: #2c3e50; font-size: 15px; font-weight: 600; margin-bottom: 8px;'>
-                📘 Aldığı Dersler:
-            </div>
-        """
+            <div style='padding: 12px; font-family: Segoe UI, Arial;'>
+                <div style='color: #2ecc71; font-size: 15px; font-weight: 600; margin-bottom: 10px;'>
+                    👤 Öğrenci: {ogr['ad_soyad']}
+                </div>
+                <div style='color: #34495e; font-size: 14px; font-weight: 600; margin-bottom: 6px;'>
+                    📘 Aldığı Dersler:
+                </div>
+            """
 
         if dersler:
             for d in dersler:
                 html += f"""
-                <div style='color: #34495e; font-size: 14px; margin-left: 20px; margin-bottom: 4px;'>
-                    • {d['ders_adi']} <span style='color: #7f8c8d;'>(Kodu: {d['ders_kodu']})</span>
-                </div>
-                """
+                    <div style='color: #34495e; font-size: 13px; margin-left: 16px; margin-bottom: 3px;'>
+                        • {d['ders_adi']} <span style='color: #95a5a6;'>(Kodu: {d['ders_kodu']})</span>
+                    </div>
+                    """
         else:
-            html += "<div style='color: #95a5a6; font-size: 14px; margin-left: 20px;'>📭 Bu öğrenciye ait ders kaydı yok.</div>"
+            html += "<div style='color: #95a5a6; font-size: 13px; margin-left: 16px;'>📭 Bu öğrenciye ait ders kaydı yok.</div>"
 
         html += "</div>"
         self.result_area.setHtml(html)
+
+    # YENİ EKLENDİ: Arama kutusuna yazıldıkça tabloyu filtreleyen fonksiyon
+    def filter_student_table(self, filter_text):
+        filter_text = filter_text.strip()
+        for row in range(self.table.rowCount()):
+            item = self.table.item(row, 0)  # Öğrenci No sütunu (0. indeks)
+            if item:
+                student_id = item.text()
+                # Eğer öğrenci no, filtre metni ile BAŞLAMIYORSA satırı gizle
+                if not student_id.startswith(filter_text):
+                    self.table.setRowHidden(row, True)
+                else:
+                    self.table.setRowHidden(row, False)
+
+    # YENİ EKLENDİ: Tablodaki bir satıra tıklandığında çalışan fonksiyon
+    def on_table_row_clicked(self, row, column):
+        # 0. sütundaki (Öğrenci No) hücreden veriyi al
+        ogr_no_item = self.table.item(row, 0)
+        if ogr_no_item:
+            ogr_no = ogr_no_item.text()
+
+            # Arama kutusunun metnini tılanan öğrenci no ile güncelle
+            self.search_box.setText(ogr_no)
+
+            # Öğrencinin detaylarını (derslerini) göster
+            self.show_student_details(ogr_no)
 
     def __init__(self, user, parent=None):
         super().__init__(parent)
@@ -163,93 +199,105 @@ class StudentListUploader(QWidget):
         self.worker = None
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(30, 30, 30, 30)
-        layout.setSpacing(20)
+        layout.setContentsMargins(25, 25, 25, 25)
+        layout.setSpacing(18)
 
-        title_frame = QFrame()
-        title_frame.setStyleSheet("""
-            QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #27ae60, stop:1 #16a085);
-                border-radius: 12px;
-                padding: 15px;
-            }
-        """)
-        title_layout = QVBoxLayout(title_frame)
+        title_label = QLabel("Öğrenci Listesi İşlemleri")
+        title_label.setAlignment(Qt.AlignLeft)
+        title_label.setStyleSheet("""
+                font-size: 24px; 
+                font-weight: 600; 
+                color: #2c3e50; 
+                margin-bottom: 5px;
+                padding: 0;
+            """)
+        layout.addWidget(title_label)
 
-        self.title = QLabel(f"🎓 {self.user['bolum_adi']} - Öğrenci Listesi")
-        self.title.setAlignment(Qt.AlignCenter)
-        self.title.setStyleSheet("font-size: 22px; font-weight: bold; color: white; background: transparent;")
-        title_layout.addWidget(self.title)
-
-        layout.addWidget(title_frame)
-
-        search_frame = QFrame()
-        search_frame.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border: 2px solid #bdc3c7;
-                border-radius: 12px;
-                padding: 15px;
-            }
-        """)
-        search_layout = QHBoxLayout(search_frame)
+        search_container = QFrame()
+        search_container.setStyleSheet("""
+                QFrame {
+                    background-color: white;
+                    border: 1px solid #e0e0e0;
+                    border-radius: 8px;
+                    padding: 0;
+                }
+            """)
+        search_layout = QHBoxLayout(search_container)
+        search_layout.setContentsMargins(15, 12, 15, 12)
         search_layout.setSpacing(10)
 
-        search_label = QLabel("🔍")
-        search_label.setStyleSheet("font-size: 20px; background: transparent; border: none;")
+        search_icon = QLabel("🔍")
+        search_icon.setStyleSheet("font-size: 18px; background: transparent; border: none; padding: 0;")
 
         self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("Öğrenci numarasını girin...")
+        self.search_box.setPlaceholderText("Öğrenci numarası ara...")
         self.search_box.setStyleSheet("""
-            QLineEdit {
-                padding: 12px 15px;
-                border: 2px solid #bdc3c7;
-                border-radius: 8px;
-                font-size: 14px;
-                background-color: #f8f9fa;
-                color: #2c3e50;
-            }
-            QLineEdit:focus {
-                border: 2px solid #16a085;
-                background-color: white;
-            }
-        """)
+                QLineEdit {
+                    padding: 10px 12px;
+                    border: 1px solid #dcdde1;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    background-color: #f8f9fa;
+                    color: #2c3e50;
+                }
+                QLineEdit:focus {
+                    border: 1px solid #5dade2;
+                    background-color: white;
+                    outline: none;
+                }
+            """)
+
+        # Sinyal bağlantıları
         self.search_box.returnPressed.connect(self.search_student)
+        # YENİ EKLENDİ: Arama kutusundaki metin her değiştiğinde filtre fonksiyonunu çağır
+        self.search_box.textChanged.connect(self.filter_student_table)
 
-        search_button = QPushButton("Ara")
-        search_button.setCursor(Qt.PointingHandCursor)
-        search_button.clicked.connect(self.search_student)
-        search_button.setFixedHeight(45)
-        search_button.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #16a085, stop:1 #138d75);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 0 25px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #138d75, stop:1 #117a65);
-            }
-            QPushButton:pressed {
-                background: #0e6655;
-            }
-        """)
+        search_btn = QPushButton("Ara")
+        search_btn.setCursor(Qt.PointingHandCursor)
+        search_btn.clicked.connect(self.search_student)
+        search_btn.setFixedHeight(40)
+        search_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #5dade2;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 0 24px;
+                    font-size: 14px;
+                    font-weight: 500;
+                }
+                QPushButton:hover {
+                    background-color: #3498db;
+                }
+                QPushButton:pressed {
+                    background-color: #2980b9;
+                }
+            """)
 
-        search_layout.addWidget(search_label)
+        search_layout.addWidget(search_icon)
         search_layout.addWidget(self.search_box, 1)
-        search_layout.addWidget(search_button)
+        search_layout.addWidget(search_btn)
 
-        layout.addWidget(search_frame)
+        layout.addWidget(search_container)
 
-        table_label = QLabel("📋 Kayıtlı Öğrenciler")
-        table_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50; margin-top: 10px;")
-        layout.addWidget(table_label)
+        self.result_area = QTextEdit()
+        self.result_area.setReadOnly(True)
+        self.result_area.setMaximumHeight(160)
+        self.result_area.setStyleSheet("""
+                QTextEdit {
+                    background-color: #f8f9fa;
+                    border: 1px solid #e0e0e0;
+                    border-radius: 8px;
+                    padding: 8px;
+                    font-size: 13px;
+                    color: #2c3e50;
+                }
+            """)
+        layout.addWidget(self.result_area)
+
+        table_header = QLabel("Kayıtlı Öğrenciler")
+        table_header.setStyleSheet("font-size: 16px; font-weight: 600; color: #2c3e50; margin-top: 8px; padding: 0;")
+        layout.addWidget(table_header)
 
         self.table = QTableWidget()
         self.table.setColumnCount(3)
@@ -257,103 +305,139 @@ class StudentListUploader(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setStyleSheet("""
-            QTableWidget {
-                background-color: white;
-                border: 2px solid #bdc3c7;
-                border-radius: 10px;
-                gridline-color: #ecf0f1;
-                font-size: 13px;
-            }
-            QTableWidget::item {
-                padding: 8px;
-                color: #2c3e50;
-            }
-            QTableWidget::item:selected {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #16a085, stop:1 #138d75);
-                color: white;
-            }
-            QHeaderView::section {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #27ae60, stop:1 #16a085);
-                color: white;
-                padding: 10px;
-                border: none;
-                font-weight: bold;
-                font-size: 13px;
-            }
-            QTableWidget::item:alternate {
-                background-color: #f8f9fa;
-            }
-        """)
+                QTableWidget {
+                    background-color: white;
+                    border: 1px solid #e0e0e0;
+                    border-radius: 8px;
+                    gridline-color: #ecf0f1;
+                    font-size: 13px;
+                }
+                QTableWidget::item {
+                    padding: 10px;
+                    color: #2c3e50;
+                    border-bottom: 1px solid #f0f0f0;
+                }
+                QTableWidget::item:selected {
+                    background-color: #e8f4f8;
+                    color: #2c3e50;
+                }
+                QHeaderView::section {
+                    background-color: #f5f6fa;
+                    color: #2c3e50;
+                    padding: 12px;
+                    border: none;
+                    border-bottom: 2px solid #dcdde1;
+                    font-weight: 600;
+                    font-size: 13px;
+                    text-align: left;
+                }
+                QTableWidget::item:alternate {
+                    background-color: #fafbfc;
+                }
+            """)
+
+        # YENİ EKLENDİ: Tabloya tıklama sinyalini ilgili fonksiyona bağla
+        self.table.cellClicked.connect(self.on_table_row_clicked)
+
         layout.addWidget(self.table)
 
-        result_label = QLabel("📄 Arama Sonucu")
-        result_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50; margin-top: 10px;")
-        layout.addWidget(result_label)
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(12)
 
-        self.result_area = QTextEdit()
-        self.result_area.setReadOnly(True)
-        self.result_area.setMaximumHeight(180)
-        self.result_area.setStyleSheet("""
-            QTextEdit {
-                background-color: white;
-                border: 2px solid #bdc3c7;
-                border-radius: 10px;
-                padding: 10px;
-                font-size: 14px;
-                color: #2c3e50;
-            }
-        """)
-        layout.addWidget(self.result_area)
-
-        self.upload_btn = QPushButton("📁 Excel Dosyası Seç ve Yükle")
+        self.upload_btn = QPushButton("Excel Dosyası Yükle")
         self.upload_btn.setCursor(Qt.PointingHandCursor)
         self.upload_btn.clicked.connect(self.upload_excel)
-        self.upload_btn.setFixedHeight(50)
+        self.upload_btn.setFixedHeight(44)
         self.upload_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #3498db, stop:1 #2980b9);
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-size: 15px;
-                font-weight: bold;
-                margin-top: 10px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #2980b9, stop:1 #21618c);
-            }
-            QPushButton:pressed {
-                background: #1a5276;
-            }
-        """)
-        layout.addWidget(self.upload_btn)
+                QPushButton {
+                    background: #5d6dfa;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    padding: 0px 24px;
+                    font-size: 14px;
+                    font-weight: 600;
+                }
+                QPushButton:hover {
+                    background: #4c5de8;
+                }
+                QPushButton:pressed {
+                    background: #3b4cd7;
+                }
+            """)
+
+        save_btn = QPushButton("Kaydet")
+        save_btn.setCursor(Qt.PointingHandCursor)
+        save_btn.setFixedHeight(44)
+        save_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #2ecc71;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-weight: 500;
+                    padding: 0 28px;
+                }
+                QPushButton:hover {
+                    background-color: #27ae60;
+                }
+                QPushButton:pressed {
+                    background-color: #229954;
+                }
+            """)
+
+        cancel_btn = QPushButton("Vazgeç")
+        cancel_btn.setCursor(Qt.PointingHandCursor)
+        cancel_btn.setFixedHeight(44)
+        cancel_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: transparent;
+                    color: #7f8c8d;
+                    border: 1px solid #bdc3c7;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-weight: 500;
+                    padding: 0 28px;
+                }
+                QPushButton:hover {
+                    background-color: #ecf0f1;
+                    color: #5a6c7d;
+                }
+                QPushButton:pressed {
+                    background-color: #dcdde1;
+                }
+            """)
+
+        button_layout.addWidget(self.upload_btn)
+        button_layout.addStretch()
+        button_layout.addWidget(save_btn)
+        button_layout.addWidget(cancel_btn)
+
+        layout.addLayout(button_layout)
 
         self.progress = QProgressBar()
         self.progress.setVisible(False)
         self.progress.setStyleSheet("""
-            QProgressBar {
-                border: 2px solid #bdc3c7;
-                border-radius: 8px;
-                text-align: center;
-                background-color: #f8f9fa;
-                height: 25px;
-                color: #2c3e50;
-                font-weight: bold;
-            }
-            QProgressBar::chunk {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #27ae60, stop:0.5 #16a085, stop:1 #138d75);
-                border-radius: 6px;
-            }
-        """)
+                QProgressBar {
+                    border: 1px solid #e0e0e0;
+                    border-radius: 6px;
+                    text-align: center;
+                    background-color: #f8f9fa;
+                    height: 24px;
+                    color: #2c3e50;
+                    font-weight: 500;
+                    font-size: 12px;
+                }
+                QProgressBar::chunk {
+                    background-color: #2ecc71;
+                    border-radius: 5px;
+                }
+            """)
         layout.addWidget(self.progress)
 
-        # Başlangıçta tabloyu doldur
         self.load_students()
 
     def upload_excel(self):
@@ -423,6 +507,7 @@ class StudentListUploader(QWidget):
         self.progress.setVisible(False)
         self.show_error("Hata", f"Yükleme sırasında hata oluştu:\n{msg}")
 
+    # ... (show_error, show_success, show_warning metodları aynı kalabilir) ...
     def show_error(self, title, message):
         msg = QMessageBox(self)
         msg.setIcon(QMessageBox.Critical)
@@ -430,29 +515,27 @@ class StudentListUploader(QWidget):
         msg.setText(message)
         msg.setStandardButtons(QMessageBox.Ok)
         msg.setStyleSheet("""
-            QMessageBox {
-                background-color: white;
-            }
-            QMessageBox QLabel {
-                color: #2c3e50;
-                font-size: 13px;
-                min-width: 300px;
-            }
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #e74c3c, stop:1 #c0392b);
-                color: white;
-                border: none;
-                border-radius: 5px;
-                padding: 8px 20px;
-                font-weight: bold;
-                min-width: 80px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #c0392b, stop:1 #a93226);
-            }
-        """)
+                QMessageBox {
+                    background-color: white;
+                }
+                QMessageBox QLabel {
+                    color: #2c3e50;
+                    font-size: 13px;
+                    min-width: 300px;
+                }
+                QPushButton {
+                    background-color: #e74c3c;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    padding: 8px 20px;
+                    font-weight: 500;
+                    min-width: 80px;
+                }
+                QPushButton:hover {
+                    background-color: #c0392b;
+                }
+            """)
         msg.exec_()
 
     def show_success(self, title, message):
@@ -462,29 +545,27 @@ class StudentListUploader(QWidget):
         msg.setText(message)
         msg.setStandardButtons(QMessageBox.Ok)
         msg.setStyleSheet("""
-            QMessageBox {
-                background-color: white;
-            }
-            QMessageBox QLabel {
-                color: #2c3e50;
-                font-size: 13px;
-                min-width: 300px;
-            }
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #27ae60, stop:1 #229954);
-                color: white;
-                border: none;
-                border-radius: 5px;
-                padding: 8px 20px;
-                font-weight: bold;
-                min-width: 80px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #229954, stop:1 #1e8449);
-            }
-        """)
+                QMessageBox {
+                    background-color: white;
+                }
+                QMessageBox QLabel {
+                    color: #2c3e50;
+                    font-size: 13px;
+                    min-width: 300px;
+                }
+                QPushButton {
+                    background-color: #2ecc71;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    padding: 8px 20px;
+                    font-weight: 500;
+                    min-width: 80px;
+                }
+                QPushButton:hover {
+                    background-color: #27ae60;
+                }
+            """)
         msg.exec_()
 
     def show_warning(self, title, message):
@@ -494,27 +575,25 @@ class StudentListUploader(QWidget):
         msg.setText(message)
         msg.setStandardButtons(QMessageBox.Ok)
         msg.setStyleSheet("""
-            QMessageBox {
-                background-color: white;
-            }
-            QMessageBox QLabel {
-                color: #2c3e50;
-                font-size: 13px;
-                min-width: 300px;
-            }
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #f39c12, stop:1 #e67e22);
-                color: white;
-                border: none;
-                border-radius: 5px;
-                padding: 8px 20px;
-                font-weight: bold;
-                min-width: 80px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #e67e22, stop:1 #d35400);
-            }
-        """)
+                QMessageBox {
+                    background-color: white;
+                }
+                QMessageBox QLabel {
+                    color: #2c3e50;
+                    font-size: 13px;
+                    min-width: 300px;
+                }
+                QPushButton {
+                    background-color: #f39c12;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    padding: 8px 20px;
+                    font-weight: 500;
+                    min-width: 80px;
+                }
+                QPushButton:hover {
+                    background-color: #e67e22;
+                }
+            """)
         msg.exec_()
