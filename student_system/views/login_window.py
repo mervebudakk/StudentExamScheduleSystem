@@ -7,6 +7,8 @@ from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QFont, QPalette, QColor
 from student_system.core.database import Database
 from PyQt5.QtWidgets import QSizePolicy, QCompleter
+from student_system.utils.helpers import show_error_message, is_valid_email
+
 
 
 class LoginWindow(QMainWindow):
@@ -293,17 +295,21 @@ class LoginWindow(QMainWindow):
 
         # Validasyon
         if not email:
-            self.show_error('E-posta adresi boş olamaz!')
+            # self.show_error('E-posta adresi boş olamaz!') <-- DEĞİŞTİ
+            show_error_message(self, 'Hata', 'E-posta adresi boş olamaz!')
             self.email_input.setFocus()
             return
 
         if not password:
-            self.show_error('Şifre boş olamaz!')
+            # self.show_error('Şifre boş olamaz!') <-- DEĞİŞTİ
+            show_error_message(self, 'Hata', 'Şifre boş olamaz!')
             self.password_input.setFocus()
             return
 
-        if '@' not in email:
-            self.show_error('Geçerli bir e-posta adresi girin!')
+        # E-posta format kontrolü is_valid_email helper'ı ile yapıldı <-- DEĞİŞTİ
+        if not is_valid_email(email):
+            # self.show_error('Geçerli bir e-posta adresi girin!') <-- DEĞİŞTİ
+            show_error_message(self, 'Hata', 'Geçerli bir e-posta adresi girin!')
             self.email_input.setFocus()
             return
 
@@ -319,8 +325,10 @@ class LoginWindow(QMainWindow):
                 self.current_user = user
                 self.open_main_window(user)
             else:
-                self.show_error(
-                    'Giriş Başarısız!\n\n'
+                # self.show_error(...) <-- DEĞİŞTİ
+                show_error_message(
+                    self,
+                    'Giriş Başarısız!',
                     'E-posta veya şifre yanlış.\n'
                     'Lütfen bilgilerinizi kontrol edin.'
                 )
@@ -328,7 +336,8 @@ class LoginWindow(QMainWindow):
                 self.password_input.setFocus()
 
         except Exception as e:
-            self.show_error(f'Bağlantı Hatası!\n\n{str(e)}')
+            # self.show_error(f'Bağlantı Hatası!\n\n{str(e)}') <-- DEĞİŞTİ
+            show_error_message(self, 'Bağlantı Hatası!', f'Bağlantı Hatası!\n\n{str(e)}')
 
         finally:
             self.login_btn.setEnabled(True)
@@ -344,77 +353,11 @@ class LoginWindow(QMainWindow):
             self.close()
 
         except Exception as e:
-            self.show_error(f'Dashboard açılırken hata:\n\n{str(e)}')
+            # self.show_error(f'Dashboard açılırken hata:\n\n{str(e)}') <-- DEĞİŞTİ
+            show_error_message(self, 'Hata', f'Dashboard açılırken hata:\n\n{str(e)}')
             print(f"Hata detayı: {e}")
             import traceback
             traceback.print_exc()
-
-    def show_error(self, message):
-        """Hata mesajı - Modern tasarım"""
-        msg = QMessageBox(self)
-        msg.setIcon(QMessageBox.Critical)
-        msg.setWindowTitle('❌ Hata')
-        msg.setText(message)
-        msg.setStandardButtons(QMessageBox.Ok)
-
-        # Modern stil
-        msg.setStyleSheet("""
-            QMessageBox {
-                background-color: white;
-            }
-            QMessageBox QLabel {
-                color: #2c3e50;
-                font-size: 13px;
-                min-width: 300px;
-            }
-            QPushButton {
-                background-color: #e74c3c;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                padding: 8px 20px;
-                font-weight: bold;
-                min-width: 80px;
-            }
-            QPushButton:hover {
-                background-color: #c0392b;
-            }
-        """)
-
-        msg.exec_()
-
-    def show_success(self, message):
-        """Başarı mesajı"""
-        msg = QMessageBox(self)
-        msg.setIcon(QMessageBox.Information)
-        msg.setWindowTitle('✅ Başarılı')
-        msg.setText(message)
-        msg.setStandardButtons(QMessageBox.Ok)
-
-        msg.setStyleSheet("""
-            QMessageBox {
-                background-color: white;
-            }
-            QMessageBox QLabel {
-                color: #2c3e50;
-                font-size: 13px;
-                min-width: 300px;
-            }
-            QPushButton {
-                background-color: #27ae60;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                padding: 8px 20px;
-                font-weight: bold;
-                min-width: 80px;
-            }
-            QPushButton:hover {
-                background-color: #229954;
-            }
-        """)
-
-        msg.exec_()
 
 
 # Standalone test

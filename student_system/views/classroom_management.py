@@ -7,6 +7,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 from student_system.core.database import Database
 from student_system.views.classroom_seatmap import ClassroomDetailPanel
+from student_system.utils.helpers import show_error_message, show_info_message, show_confirmation_dialog
 from PyQt5.QtWidgets import QDialog
 import re
 

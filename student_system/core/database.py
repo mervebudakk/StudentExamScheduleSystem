@@ -215,6 +215,50 @@ class Database:
             cur.close()
             conn.close()
 
+    ### YENİ EKLENTİ: İş Akışı Kontrol Fonksiyonları ###
+
+    @staticmethod
+    def check_classrooms_exist(bolum_id: int) -> bool:
+        """Bölüm için en az bir derslik var mı?"""
+        if bolum_id is None:
+            return False
+        r = Database.execute_query(
+            "SELECT COUNT(*) as c FROM derslikler WHERE bolum_id=%s AND aktif=true", (bolum_id,)
+        )
+        return r[0]['c'] > 0 if r else False
+
+    @staticmethod
+    def check_courses_exist(bolum_id: int) -> bool:
+        """Bölüm için en az bir ders var mı?"""
+        if bolum_id is None:
+            return False
+        r = Database.execute_query(
+            "SELECT COUNT(*) as c FROM dersler WHERE bolum_id=%s AND aktif=true", (bolum_id,)
+        )
+        return r[0]['c'] > 0 if r else False
+
+    @staticmethod
+    def check_students_exist(bolum_id: int) -> bool:
+        """Bölüm için en az bir öğrenci var mı?"""
+        if bolum_id is None:
+            return False
+        r = Database.execute_query(
+            "SELECT COUNT(*) as c FROM ogrenciler WHERE bolum_id=%s AND aktif=true", (bolum_id,)
+        )
+        return r[0]['c'] > 0 if r else False
+
+    @staticmethod
+    def check_schedule_exists(bolum_id: int) -> bool:
+        """Bölüm için en az bir sınav programı var mı?"""
+        if bolum_id is None:
+            return False
+        r = Database.execute_query(
+            "SELECT COUNT(*) as c FROM sinavlar WHERE bolum_id=%s", (bolum_id,)
+        )
+        return r[0]['c'] > 0 if r else False
+
+    ### YENİ EKLENTİ SONU ###
+
 
 # Eski isimlendirme için backward compatibility
 DatabaseManager = Database

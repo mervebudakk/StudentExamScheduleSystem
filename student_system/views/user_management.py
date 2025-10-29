@@ -1,3 +1,4 @@
+import sys
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget,
     QTableWidgetItem, QMessageBox, QDialog, QLineEdit, QComboBox, QFormLayout,
@@ -6,6 +7,16 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QFont
 from student_system.core.database import Database
+
+# --- YENİ İMPORTLAR ---
+# Artık helpers.py dosyasındaki fonksiyonları kullanıyoruz
+from student_system.utils.helpers import (
+    show_warning_message,
+    show_info_message,
+    show_confirmation_dialog
+)
+# --- YENİ İMPORTLAR SONU ---
+
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -255,32 +266,27 @@ class UserManagement(QWidget):
     def deactivate_user(self):
         email = self.get_selected_email()
         if not email:
-            QMessageBox.warning(self, "Uyarı", "Lütfen bir kullanıcı seçin!")
+            # QMessageBox.warning(...) <-- DEĞİŞTİ
+            show_warning_message(self, "Uyarı", "Lütfen bir kullanıcı seçin!")
             return
 
         Database.execute_non_query("UPDATE Kullanicilar SET aktif = FALSE WHERE email = %s", (email,))
-        QMessageBox.information(self, "Başarılı", "Kullanıcı pasif hale getirildi.")
+        # QMessageBox.information(...) <-- DEĞİŞTİ
+        show_info_message(self, "Başarılı", "Kullanıcı pasif hale getirildi.")
         self.load_users()
 
     def delete_user(self):
         email = self.get_selected_email()
         if not email:
-            QMessageBox.warning(self, "Uyarı", "Lütfen silmek için bir kullanıcı seçin!")
+            # QMessageBox.warning(...) <-- DEĞİŞTİ
+            show_warning_message(self, "Uyarı", "Lütfen silmek için bir kullanıcı seçin!")
             return
 
-        confirm_box = QMessageBox(self)
-        confirm_box.setWindowTitle("Silme Onayı")
-        confirm_box.setText(f"{email} kullanıcısı tamamen silinsin mi?")
-        confirm_box.setIcon(QMessageBox.Warning)
-
-        btn_yes = confirm_box.addButton("Evet", QMessageBox.YesRole)
-        btn_no = confirm_box.addButton("Hayır", QMessageBox.NoRole)
-
-        confirm_box.exec_()
-
-        if confirm_box.clickedButton() == btn_yes:
+        # Uzun QMessageBox bloğu yerine helper fonksiyonu kullanıldı <-- DEĞİŞTİ
+        if show_confirmation_dialog(self, "Silme Onayı", f"{email} kullanıcısı tamamen silinsin mi?"):
             Database.execute_non_query("DELETE FROM Kullanicilar WHERE email = %s", (email,))
-            QMessageBox.information(self, "Başarılı", "Kullanıcı silindi 🗑")
+            # QMessageBox.information(...) <-- DEĞİŞTİ
+            show_info_message(self, "Başarılı", "Kullanıcı silindi 🗑")
             self.load_users()
 
 
@@ -423,12 +429,14 @@ Lütfen ilk girişte şifrenizi değiştiriniz.
         bolum_id = self.cmb_dep.currentData()
 
         if not name or not email:
-            QMessageBox.warning(self, "Hata", "Tüm alanları doldurun!")
+            # QMessageBox.warning(...) <-- DEĞİŞTİ
+            show_warning_message(self, "Hata", "Tüm alanları doldurun!")
             return
 
         exists = Database.execute_query("SELECT 1 FROM Kullanicilar WHERE email = %s", (email,))
         if exists:
-            QMessageBox.warning(self, "Hata", "Bu email zaten kayıtlı!")
+            # QMessageBox.warning(...) <-- DEĞİŞTİ
+            show_warning_message(self, "Hata", "Bu email zaten kayıtlı!")
             return
 
         password = self.generate_password()
@@ -440,8 +448,10 @@ Lütfen ilk girişte şifrenizi değiştiriniz.
         """, (email, hashed, name, bolum_id))
 
         if self.send_email(email, password):
-            QMessageBox.information(self, "Başarılı", "Kullanıcı eklendi ve şifre email ile gönderildi.")
+            # QMessageBox.information(...) <-- DEĞİŞTİ
+            show_info_message(self, "Başarılı", "Kullanıcı eklendi ve şifre email ile gönderildi.")
         else:
-            QMessageBox.warning(self, "Uyarı", "Kullanıcı eklendi fakat mail gönderilemedi!")
+            # QMessageBox.warning(...) <-- DEĞİŞTİ
+            show_warning_message(self, "Uyarı", "Kullanıcı eklendi fakat mail gönderilemedi!")
 
         self.close()

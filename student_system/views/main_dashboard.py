@@ -7,29 +7,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from student_system.core.database import Database
 import traceback
-
-
-class PermissionManager:
-    def __init__(self, user_id):
-        self.user_id = user_id
-        self.permissions = self.load_permissions()
-
-    def load_permissions(self):
-        perms = Database.execute_query("""
-            SELECT y.yetki_kodu 
-            FROM kullanicilar k
-            JOIN roller r ON k.rol_id = r.rol_id
-            JOIN rolyetkileri ry ON r.rol_id = ry.rol_id
-            JOIN yetkiler y ON ry.yetki_id = y.yetki_id
-            WHERE k.kullanici_id = %s
-        """, (self.user_id,)) or []
-        return {p['yetki_kodu'] for p in perms}
-
-    def has_permission(self, permission_code):
-        return permission_code in self.permissions
-
-    def can_manage_all_departments(self):
-        return self.has_permission('TUM_BOLUM_ERISIM')
+from student_system.core.permissions import PermissionManager
+from student_system.utils.helpers import show_error_message, show_warning_message, show_confirmation_dialog
 
 
 class MainDashboard(QMainWindow):
@@ -39,6 +18,11 @@ class MainDashboard(QMainWindow):
         self.permission_manager = PermissionManager(user['id'])
         self.content_layout = None
         self.active_menu_button = None
+
+        ### YENİ EKLENTİ: Buton referanslarını saklamak için ###
+        self.menu_buttons = {}
+        ### YENİ EKLENTİ SONU ###
+
         self.init_ui()
 
     def init_ui(self):
@@ -65,6 +49,10 @@ class MainDashboard(QMainWindow):
                 background-color: #f5f7fa;
             }
         """)
+
+        ### YENİ EKLENTİ: Arayüzü ilk açılışta yetkilendir ###
+        self.update_ui_authorization()
+        ### YENİ EKLENTİ SONU ###
 
     def create_content_area(self):
         self.content_frame = QFrame()
@@ -144,6 +132,11 @@ class MainDashboard(QMainWindow):
 
         for item in self.get_menu_items():
             btn = self.create_menu_button(item['text'], item['icon'], item['callback'])
+
+            ### YENİ EKLENTİ: Buton referansını sakla ###
+            self.menu_buttons[item['text']] = btn
+            ### YENİ EKLENTİ SONU ###
+
             layout.addWidget(btn)
 
         layout.addStretch()
@@ -245,6 +238,13 @@ class MainDashboard(QMainWindow):
                 background-color: rgba(255, 255, 255, 0.1);
                 border-left: 3px solid white;
             }
+            QPushButton:disabled {
+                color: rgba(255, 255, 255, 0.4);
+            }
+            QPushButton:disabled:hover {
+                background-color: transparent;
+                border-left: 3px solid transparent;
+            }
         """)
         return btn
 
@@ -264,6 +264,13 @@ class MainDashboard(QMainWindow):
                     background-color: rgba(255, 255, 255, 0.1);
                     border-left: 3px solid white;
                 }
+                QPushButton:disabled {
+                    color: rgba(255, 255, 255, 0.4);
+                }
+                QPushButton:disabled:hover {
+                    background-color: transparent;
+                    border-left: 3px solid transparent;
+                }
             """)
 
         button.setStyleSheet("""
@@ -276,6 +283,11 @@ class MainDashboard(QMainWindow):
                 background-color: rgba(255, 255, 255, 0.15);
                 border-left: 3px solid white;
                 font-weight: 600;
+            }
+            QPushButton:disabled {
+                color: rgba(255, 255, 255, 0.4);
+                background-color: rgba(255, 255, 255, 0.15);
+                border-left: 3px solid white;
             }
         """)
 
@@ -451,7 +463,80 @@ class MainDashboard(QMainWindow):
             r = Database.execute_query("SELECT COUNT(*) as count FROM sinavlar")
         return r[0]['count'] if r else 0
 
+    ### YENİ EKLENTİ: İş Akışı Buton Kontrolü ###
+    def update_ui_authorization(self):
+        """
+        Proje dokümanındaki iş akışına göre butonları etkinleştirir/devre dışı bırakır.
+        Admin rolü bu kısıtlamalardan muaftır.
+        """
+        try:
+            # Admin rolü (rol_adi == 'Admin') veya bölümü olmayan
+            # (bolum_id is None) kullanıcılar kısıtlanmaz.
+            if self.user['rol'] == 'Admin' or self.user['bolum_id'] is None:
+                return
+
+            bolum_id = self.user['bolum_id']
+
+            # 1. Derslik Kontrolü
+            # (Dokümana göre derslik yoksa sadece derslik yönetimi aktif olmalı)
+            derslik_var = Database.check_classrooms_exist(bolum_id)
+
+            if self.menu_buttons.get('Derslik Yönetimi'):
+                self.menu_buttons['Derslik Yönetimi'].setEnabled(True)
+
+            if self.menu_buttons.get('Ders Listesi İşlemleri'):
+                self.menu_buttons['Ders Listesi İşlemleri'].setEnabled(derslik_var)
+
+            if self.menu_buttons.get('Öğrenci Listesi İşlemleri'):
+                self.menu_buttons['Öğrenci Listesi İşlemleri'].setEnabled(derslik_var)
+
+            if self.menu_buttons.get('Sınav Programı'):
+                self.menu_buttons['Sınav Programı'].setEnabled(derslik_var)
+
+            if self.menu_buttons.get('Oturma Planı'):
+                self.menu_buttons['Oturma Planı'].setEnabled(derslik_var)
+
+            if not derslik_var:
+                return  # Derslik yoksa daha fazla kontrol yapma
+
+            # 2. Excel Yükleme Kontrolü
+            # (Sınav programı için hem ders hem öğrenci listesi yüklenmiş olmalı)
+            ders_var = Database.check_courses_exist(bolum_id)
+            ogrenci_var = Database.check_students_exist(bolum_id)
+            exceller_yuklenmis = ders_var and ogrenci_var
+
+            if self.menu_buttons.get('Sınav Programı'):
+                self.menu_buttons['Sınav Programı'].setEnabled(exceller_yuklenmis)
+
+            if self.menu_buttons.get('Oturma Planı'):
+                self.menu_buttons['Oturma Planı'].setEnabled(exceller_yuklenmis)
+
+            if not exceller_yuklenmis:
+                return  # Excel'ler yüklenmemişse daha fazla kontrol yapma
+
+            # 3. Sınav Programı Kontrolü
+            # (Oturma planı için sınav programı oluşturulmuş olmalı)
+            program_var = Database.check_schedule_exists(bolum_id)
+
+            if self.menu_buttons.get('Oturma Planı'):
+                self.menu_buttons['Oturma Planı'].setEnabled(program_var)
+
+        except Exception as e:
+            print(f"HATA (update_ui_authorization): {e}")
+            # Bir hata olursa güvenli modda çoğu şeyi devre dışı bırak
+            if self.menu_buttons.get('Ders Listesi İşlemleri'):
+                self.menu_buttons['Ders Listesi İşlemleri'].setEnabled(False)
+            if self.menu_buttons.get('Sınav Programı'):
+                self.menu_buttons['Sınav Programı'].setEnabled(False)
+            if self.menu_buttons.get('Oturma Planı'):
+                self.menu_buttons['Oturma Planı'].setEnabled(False)
+
+    ### YENİ EKLENTİ SONU ###
+
     def show_dashboard(self):
+        ### YENİ EKLENTİ: Ana sayfaya her tıklandığında buton durumunu güncelle ###
+        self.update_ui_authorization()
+        ### YENİ EKLENTİ SONU ###
         self.show_dashboard_content()
 
     def open_user_management(self):
@@ -510,43 +595,17 @@ class MainDashboard(QMainWindow):
             self.content_layout.addWidget(self.seatplan_widget)
         except Exception as e:
             QMessageBox.critical(self, "Oturma Planı",
-                               f"Ekran yüklenirken hata:\n\n{e}\n\n{traceback.format_exc()}")
-
+                                 f"Ekran yüklenirken hata:\n\n{e}\n\n{traceback.format_exc()}")
 
     def logout(self):
-        reply = QMessageBox.question(self, 'Çıkış', 'Çıkış yapmak istediğinize emin misiniz?',
-                                    QMessageBox.Yes | QMessageBox.No)
-        if reply == QMessageBox.Yes:
+        # show_confirmation_dialog fonksiyonu "Evet" tıklandığında zaten True döner.
+        if show_confirmation_dialog(self, 'Çıkış', 'Çıkış yapmak istediğinize emin misiniz?'):
+            # Kullanıcı "Evet" dediği için doğrudan çıkış işlemlerini yap:
             self.close()
             from student_system.views.login_window import LoginWindow
             self.login_window = LoginWindow()
             self.login_window.show()
 
     def show_permission_error(self):
-        msg = QMessageBox(self)
-        msg.setIcon(QMessageBox.Warning)
-        msg.setWindowTitle('⚠️ Yetki Hatası')
-        msg.setText('Bu işlem için yetkiniz bulunmamaktadır.')
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.setStyleSheet("""
-            QMessageBox {
-                background-color: white;
-            }
-            QMessageBox QLabel {
-                color: #2c3e50;
-                font-size: 13px;
-                min-width: 300px;
-            }
-            QPushButton {
-                background-color: #27ae60;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 10px 25px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background-color: #229954;
-            }
-        """)
-        msg.exec_()
+        # Yeni helper fonksiyonunuzu burada kullanın
+        show_warning_message(self, 'Yetki Hatası', 'Bu işlem için yetkiniz bulunmamaktadır.')
