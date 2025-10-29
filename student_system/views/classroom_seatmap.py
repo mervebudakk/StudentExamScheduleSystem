@@ -71,10 +71,20 @@ class SeatMapWidget(QWidget):
 
                 # Koltuklar (yapi kadar)
                 seat_w = (desk_rect.width() - (self.yapi + 1) * seat_gap) / self.yapi
-                seat_h = max(30, desk_rect.height() / 2 - seat_gap)
-                seat_h = min(seat_h, desk_rect.height() - 2 * seat_gap)
 
-                sy = desk_rect.bottom() - seat_h - seat_gap
+                # --- DÜZELTME BAŞLANGICI ---
+                # Koltuk yüksekliğini, mevcut "desk_rect" alanının tamamını
+                # (üstte ve altta küçük bir boşlukla) kaplayacak şekilde ayarla
+                seat_h = max(30, desk_rect.height() - (2 * seat_gap))
+
+                # Y pozisyonunu da "alttan" değil "üstten" başlat
+                sy = desk_rect.top() + seat_gap
+
+                # Renkleri tanımla
+                renk_dolu = QColor("#AED6F1")
+                renk_bos_kullanilabilir = Qt.lightGray
+                renk_bos_kullanilamaz = QColor("#EAECEE")  # Sosyal mesafe boşluğu (örn. Koyu Gri)
+                # VEYA: renk_bos_kullanilamaz = QColor("#FADBD8") # Soluk Kırmızı
 
                 for i in range(1, self.yapi + 1):
                     # 0-based index'e çevir (çizim için)
@@ -84,37 +94,65 @@ class SeatMapWidget(QWidget):
                     key = (r, c, i)
                     student_info = self.placements_map.get(key)
 
+                    # KULLANILAMAZ (Sosyal Mesafe) koltukları belirle
+                    is_unusable = False
+                    if self.yapi == 3 and i == 2:  # 3'lü sıranın ortası
+                        is_unusable = True
+                    elif self.yapi == 4 and (i == 2 or i == 3):  # 4'lü sıranın ortası
+                        is_unusable = True
+
                     if student_info:
-                        # Dolu koltuk (Renk referansa benzetildi)
-                        p.setBrush(QBrush(QColor("#AED6F1")))  # GÜNCELLENDİ
+                        # 1. DOLU KOLTUK
+                        p.setBrush(QBrush(renk_dolu))
                         p.drawRoundedRect(seat_rect, 5, 5)
-                        p.setPen(Qt.black)  # GÜNCELLENDİ (Yazı rengi)
-                        p.setFont(text_font)
+                        p.setPen(Qt.black)
 
-                        # Metin için iç boşluk (padding)
-                        text_rect = seat_rect.adjusted(3, 3, -3, -3)
+                        # Fontu 3'lü/4'lü sıralar için küçük (6pt) tut
+                        if self.yapi >= 3:
+                            current_font = QFont("Segoe UI", 6)
+                        else:
+                            current_font = QFont("Segoe UI", 7)
 
-                        # HİZALAMA DÜZELTİLDİ
+                        p.setFont(current_font)
+
+                        # --- HİZALAMA DÜZELTMESİ ---
+                        # Metin için iç boşluğu (padding) minimuma indir
+                        text_rect = seat_rect.adjusted(2, 2, -2, -2)
+
+                        # Metni "Üstte ve Ortada" hizala (Dikey ortalamayı kaldır)
                         p.drawText(text_rect,
                                    Qt.AlignTop | Qt.AlignHCenter | Qt.TextWordWrap,
                                    student_info)
+
+                    elif is_unusable:
+                        # 2. KULLANILAMAZ (SOSYAL MESAFE) KOLTUK
+                        p.setBrush(QBrush(renk_bos_kullanilamaz))
+                        pen.setStyle(Qt.DotLine)  # Kenarlığı noktalı yap
+                        p.setPen(pen)
+                        p.drawRoundedRect(seat_rect, 5, 5)
+                        pen.setStyle(Qt.SolidLine)  # Kalemi sıfırla
+
                     else:
-                        # Boş koltuk
-                        p.setBrush(QBrush(Qt.lightGray))
+                        # 3. BOŞ (AMA KULLANILABİLİR) KOLTUK
+                        p.setBrush(QBrush(renk_bos_kullanilabilir))
                         p.drawRoundedRect(seat_rect, 5, 5)
 
                     p.setPen(pen)  # Kalemi her koltuktan sonra sıfırla
 
-        # Kapasite uyarısı
-        computed = self.enine * self.boyuna * self.yapi
-        p.setFont(QFont("Segoe UI", 9))
-        msg = f"Hesaplanan kapasite: {computed}"
-        if self.kapasite and self.kapasite != computed:
-            p.setPen(Qt.red)
-            msg += f"  |  ⚠️ Veri kapasitesi: {self.kapasite} (eşleşmiyor)"
-        else:
-            p.setPen(Qt.darkGreen)
-        p.drawText(margin, h - 8, msg)
+                # Kapasite bilgisi
+                fiziksel_kapasite = self.enine * self.boyuna * self.yapi
+                sinav_kapasitesi = self.kapasite  # DB'den gelen kapasite
+
+                p.setFont(QFont("Segoe UI", 9))
+                p.setPen(Qt.darkGray)  # Veya istediğiniz bir renk
+
+                msg = (
+                    f"Fiziksel Kapasite (Tüm Koltuklar): {fiziksel_kapasite}  "
+                    f"({self.enine} Enine x {self.boyuna} Boyuna x {self.yapi} Yapı)    |    "
+                    f"Sınav Kapasitesi (Sosyal Mesafeli): {sinav_kapasitesi}"
+                )
+
+                p.drawText(margin, h - 8, msg)
 
 
 class ClassroomDetailPanel(QFrame):

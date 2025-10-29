@@ -163,22 +163,22 @@ class SeatPlanView(QWidget):
         self.tbl_rooms.itemSelectionChanged.connect(self._on_table_select)
 
         tv.addWidget(self.tbl_rooms)
-        root.addWidget(table_wrap)
+        root.addWidget(table_wrap, 2)
 
         # Önizleme (SeatMapWidget)
         preview_wrap = QFrame()
         preview_wrap.setStyleSheet("QFrame { background:white; border:2px solid #ecf0f1; border-radius:12px; }")
         pv = QVBoxLayout(preview_wrap);
-        pv.setContentsMargins(12, 12, 12, 12);
-        pv.setSpacing(10)
+        pv.setContentsMargins(12, 1, 12, 1);
+        pv.setSpacing(1)
 
-        self.preview_title = QLabel("Derslik Oturum Önizlemesi (Görselleştirmek için tablodan seçin)")
+        self.preview_title = QLabel("Derslik Oturum Önizlemesi (Görselleştirmek için tablodan derslik seçiniz.)")
         self.preview_title.setStyleSheet("font-size:14px; font-weight:700; color:#2c3e50;")
-        pv.addWidget(self.preview_title)
+        pv.addWidget(self.preview_title, 0)
 
         self.preview = SeatMapWidget(enine=6, boyuna=10, yapi=3, kapasite=180, placements=None)  # varsayılan
-        pv.addWidget(self.preview)
-        root.addWidget(preview_wrap)
+        pv.addWidget(self.preview, 1)
+        root.addWidget(preview_wrap, 5)
 
     # ---------- Data ----------
     def _load_exams(self):
@@ -410,29 +410,43 @@ class SeatPlanView(QWidget):
 
                 placed_in_this_room = 0
 
-                # Not: Proje forum görsellerinde "Öğrenci-Boş-Boş-Öğrenci" gibi
-                # sosyal mesafeli bir oturma düzeni istenmiş.
-                # Ancak ana proje dökümanı sadece "kapasite" kısıtından bahsetmiş.
-                # Bu kod, ana dökümandaki basit kapasite hedefini uygulayarak
-                # sıraları tamamen doldurur.
-                # Eğer sosyal mesafeli düzen gerekirse, bu aşağıdaki döngü
-                # algoritmasının değişmesi gerekir.
 
                 for r in range(1, boyuna + 1):
                     for c in range(1, enine + 1):
-                        for k in range(1, yapi + 1):
+                        for k in range(1, yapi + 1):  # k = koltuk_no (1-based)
 
-                            if ogr_index >= total_students or placed_in_this_room >= kapasite:
-                                break
+                            # --- SOSYAL MESAFE KURAL KONTROLÜ ---
+                            is_valid_seat = False
+                            if yapi == 1:
+                                is_valid_seat = True
+                            elif yapi == 2:
+                                # Forum mesajında "2lik sıralara ise sıranın sağ tarafına" diyordu.
+                                # Bu k=2 (sağ taraf) anlamına gelir.
+                                is_valid_seat = (k == 2)
+                            elif yapi == 3 and (k == 1 or k == 3):  # 3'lünün kenarları (k=1, k=3)
+                                is_valid_seat = True
+                            elif yapi == 4 and (k == 1 or k == 4):  # 4'lünün kenarları (k=1, k=4)
+                                is_valid_seat = True
+                            # --- KURAL KONTROLÜ SONU ---
 
-                            ogrenci_id = ogrenciler[ogr_index]['ogrenci_id']
+                            # SADECE ŞU DURUMLARDA ÖĞRENCİ ATA:
+                            # 1. Koltuk geçerliyse (is_valid_seat == True)
+                            # 2. Atanacak öğrenci kaldıysa (ogr_index < total_students)
+                            # 3. Dersliğin (sınav) kapasitesi dolmadıysa (placed_in_this_room < kapasite)
 
-                            plan_values.append(
-                                (sinav_id, ogrenci_id, derslik_id, r, c, k)
-                            )
-                            ogr_index += 1
-                            placed_in_this_room += 1
+                            if is_valid_seat and ogr_index < total_students and placed_in_this_room < kapasite:
+                                ogrenci_id = ogrenciler[ogr_index]['ogrenci_id']
 
+                                plan_values.append(
+                                    (sinav_id, ogrenci_id, derslik_id, r, c, k)
+                                )
+                                ogr_index += 1
+                                placed_in_this_room += 1
+
+                            # 'else' durumunda (örn. 3'lünün ortası k=2 ise)
+                            # hiçbir şey yapılmaz ve o koltuk veritabanına eklenmez (boş kalır).
+
+                        # Kapasite veya öğrenci bittiyse iç döngüleri kır
                         if ogr_index >= total_students or placed_in_this_room >= kapasite: break
                     if ogr_index >= total_students or placed_in_this_room >= kapasite: break
 
