@@ -20,6 +20,7 @@ class ClassroomManagement(QWidget):
         self.current_id = None
         self.form_visible = False
 
+
         self.setWindowTitle("Derslik Yönetimi")
         self.setMinimumSize(1200, 750)
 
@@ -43,7 +44,7 @@ class ClassroomManagement(QWidget):
         hl = QHBoxLayout(header)
         hl.setContentsMargins(0, 0, 0, 20)
 
-        title = QLabel("Derslik Yönetimi")
+        title = QLabel(f"{self.user['bolum_adi']} - Derslik Yönetimi")
         title.setStyleSheet("color: #2c3e50; font-size: 28px; font-weight: 700; border: none;")
         hl.addWidget(title)
         hl.addStretch()

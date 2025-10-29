@@ -202,7 +202,7 @@ class StudentListUploader(QWidget):
         layout.setContentsMargins(25, 25, 25, 25)
         layout.setSpacing(18)
 
-        title_label = QLabel("Öğrenci Listesi İşlemleri")
+        title_label = QLabel(f"{self.user['bolum_adi']} - Öğrenci Listesi İşlemleri")
         title_label.setAlignment(Qt.AlignLeft)
         title_label.setStyleSheet("""
                 font-size: 24px; 

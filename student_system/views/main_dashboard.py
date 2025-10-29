@@ -18,10 +18,12 @@ class MainDashboard(QMainWindow):
         self.permission_manager = PermissionManager(user['id'])
         self.content_layout = None
         self.active_menu_button = None
-
-        ### YENİ EKLENTİ: Buton referanslarını saklamak için ###
         self.menu_buttons = {}
-        ### YENİ EKLENTİ SONU ###
+
+        self.admin_selected_department = {
+            'bolum_id': None,
+            'bolum_adi': None
+        }
 
         self.init_ui()
 
@@ -118,6 +120,10 @@ class MainDashboard(QMainWindow):
         user_info = self.create_user_info_section()
         layout.addWidget(user_info)
 
+        if self.user['rol'] == 'Admin':
+            admin_dept_frame = self.create_admin_dept_selector()
+            layout.addWidget(admin_dept_frame)
+
         menu_title = QLabel('MENÜ')
         menu_title.setStyleSheet("""
                 QLabel {
@@ -147,6 +153,98 @@ class MainDashboard(QMainWindow):
 
         sidebar.setLayout(layout)
         return sidebar
+
+    def create_admin_dept_selector(self):
+        """Admin için bölüm seçici QComboBox'u oluşturan frame'i döndürür."""
+        frame = QFrame()
+        frame.setStyleSheet("""
+            QFrame {
+                padding: 10px 20px 20px 20px; /* Üst, Sağ, Alt, Sol */
+            }
+        """)
+        layout = QVBoxLayout()
+        layout.setSpacing(8)
+
+        label = QLabel('YÖNETİLEN BÖLÜM')
+        label.setStyleSheet("""
+            QLabel {
+                color: rgba(255, 255, 255, 0.9);
+                font-size: 13px;
+                font-weight: 700;
+                letter-spacing: 1px;
+            }
+        """)
+
+        self.admin_dept_combo = QComboBox()
+        self.admin_dept_combo.setStyleSheet("""
+            QComboBox {
+                background-color: white;
+                color: #2c3e50;
+                padding: 8px 10px;
+                border-radius: 5px;
+                font-size: 13px;
+            }
+        """)
+
+        # ComboBox'u doldur
+        self.populate_admin_combo()
+
+        # Sinyali bağla
+        self.admin_dept_combo.currentIndexChanged.connect(self.on_admin_dept_change)
+
+        layout.addWidget(label)
+        layout.addWidget(self.admin_dept_combo)
+        frame.setLayout(layout)
+        return frame
+
+    def populate_admin_combo(self):
+        """Admin QComboBox'unu veritabanındaki bölümlerle doldurur."""
+        try:
+            # 'Bölüm Seç' seçeneğini başta ekle
+            self.admin_dept_combo.addItem("Bölüm Seçilmedi", None)
+
+            r = Database.execute_query("SELECT bolum_id, bolum_adi FROM bolumler WHERE aktif = true ORDER BY bolum_adi")
+            if r:
+                for bolum in r:
+                    self.admin_dept_combo.addItem(bolum['bolum_adi'], bolum['bolum_id'])
+
+            # Başlangıçta ilk seçimi yap (Bölüm Seçilmedi)
+            self.on_admin_dept_change(0)  # 0. indeksi tetikle
+
+        except Exception as e:
+            show_error_message(self, "Hata", f"Admin bölüm listesi yüklenemedi: {e}")
+
+    def on_admin_dept_change(self, index):
+        """Admin bölüm seçimini değiştirdiğinde state'i günceller."""
+        self.admin_selected_department['bolum_id'] = self.admin_dept_combo.itemData(index)
+        self.admin_selected_department['bolum_adi'] = self.admin_dept_combo.itemText(index)
+
+        # Eğer "Bölüm Seçilmedi" (ID=None) seçilirse, adı da None yap
+        if self.admin_selected_department['bolum_id'] is None:
+            self.admin_selected_department['bolum_adi'] = None
+
+        # ÖNEMLİ: Bölüm değiştiğinde ana sayfa istatistiklerini ve
+        # iş akışı butonlarını (update_ui_authorization) güncelle
+        self.update_ui_authorization()
+        if self.active_menu_button and self.active_menu_button.text().strip() == '🏠 Ana Sayfa':
+            self.show_dashboard_content()
+
+    def get_scoped_user(self):
+        """
+        Mevcut 'self.user'ın bir kopyasını alır.
+        Eğer kullanıcı Admin ise, kopyanın 'bolum_id' ve 'bolum_adi' alanlarını
+        ComboBox'ta seçili olanla değiştirir.
+        """
+
+        # Orijinal user'ın bir kopyasını al (bu çok önemli)
+        scoped_user = self.user.copy()
+
+        if self.user['rol'] == 'Admin':
+            # Kopyalanan user'ın bolum_id ve bolum_adi'sini ez.
+            scoped_user['bolum_id'] = self.admin_selected_department['bolum_id']
+            scoped_user['bolum_adi'] = self.admin_selected_department['bolum_adi']
+
+        return scoped_user
 
     def get_menu_items(self):
         pm = self.permission_manager
@@ -548,46 +646,86 @@ class MainDashboard(QMainWindow):
         if not self.permission_manager.has_permission('DERSLIK_YONET'):
             self.show_permission_error()
             return
+
+        scoped_user = self.get_scoped_user()
+
+        if scoped_user['rol'] == 'Admin' and scoped_user['bolum_id'] is None:
+            show_warning_message(self, "Bölüm Seçilmedi",
+                                 "Lütfen dersliklerini yönetmek için bir bölüm seçin.")
+            return
+
         from student_system.views.classroom_management import ClassroomManagement
         self.clear_content_area()
-        self.cm_widget = ClassroomManagement(self.user, self.permission_manager, parent=self)
+        self.cm_widget = ClassroomManagement(scoped_user, self.permission_manager, parent=self)
         self.content_layout.addWidget(self.cm_widget)
 
     def open_course_upload(self):
         if not self.permission_manager.has_permission('DERS_YUKLE'):
             self.show_permission_error()
             return
+
+        scoped_user = self.get_scoped_user()
+
+        if scoped_user['rol'] == 'Admin' and scoped_user['bolum_id'] is None:
+            show_warning_message(self, "Bölüm Seçilmedi",
+                                 "Lütfen dersliklerini yönetmek için bir bölüm seçin.")
+            return
+
         from student_system.views.lesson_list import LessonListUploader
         self.clear_content_area()
-        uploader = LessonListUploader(self.user, self)
+        uploader = LessonListUploader(scoped_user, self)
         self.content_layout.addWidget(uploader)
 
     def open_student_upload(self):
         if not self.permission_manager.has_permission('OGRENCI_YUKLE'):
             self.show_permission_error()
             return
+
+        scoped_user = self.get_scoped_user()
+
+        if scoped_user['rol'] == 'Admin' and scoped_user['bolum_id'] is None:
+            show_warning_message(self, "Bölüm Seçilmedi",
+                                 "Lütfen dersliklerini yönetmek için bir bölüm seçin.")
+            return
+
         from student_system.views.student_list import StudentListUploader
         self.clear_content_area()
-        uploader = StudentListUploader(self.user, self)
+        uploader = StudentListUploader(scoped_user, self)
         self.content_layout.addWidget(uploader)
 
     def open_exam_scheduler(self):
         if not self.permission_manager.has_permission('SINAV_OLUSTUR'):
             self.show_permission_error()
             return
+
+        scoped_user = self.get_scoped_user()
+
+        if scoped_user['rol'] == 'Admin' and scoped_user['bolum_id'] is None:
+            show_warning_message(self, "Bölüm Seçilmedi",
+                                 "Lütfen dersliklerini yönetmek için bir bölüm seçin.")
+            return
+
         from student_system.views.exam_scheduler import ExamScheduler
         self.clear_content_area()
-        uploader = ExamScheduler(self.user, self)
+        uploader = ExamScheduler(scoped_user, self)
         self.content_layout.addWidget(uploader)
 
     def open_seating_plan(self):
         if not self.permission_manager.has_permission('OTURMA_PLAN'):
             self.show_permission_error()
             return
+
+        scoped_user = self.get_scoped_user()
+
+        if scoped_user['rol'] == 'Admin' and scoped_user['bolum_id'] is None:
+            show_warning_message(self, "Bölüm Seçilmedi",
+                                 "Lütfen dersliklerini yönetmek için bir bölüm seçin.")
+            return
+
         try:
             from student_system.views.seat_plan import SeatPlanView
             self.clear_content_area()
-            self.seatplan_widget = SeatPlanView(self.user, self.permission_manager, parent=self)
+            self.seatplan_widget = SeatPlanView(scoped_user, self.permission_manager, parent=self)
             self.content_layout.addWidget(self.seatplan_widget)
         except Exception as e:
             QMessageBox.critical(self, "Oturma Planı",

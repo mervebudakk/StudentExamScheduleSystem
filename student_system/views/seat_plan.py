@@ -111,7 +111,7 @@ class SeatPlanView(QWidget):
         """)
         hl = QHBoxLayout(header);
         hl.setContentsMargins(18, 14, 18, 14)
-        title = QLabel("💺 Oturma Planı")
+        title = QLabel(f"{self.user['bolum_adi']} - Oturma Planı")
         title.setStyleSheet("font-size:20px; font-weight:700;")
         hl.addWidget(title);
         hl.addStretch()
