@@ -16,7 +16,8 @@ from email.mime.multipart import MIMEMultipart
 import random
 import string
 import bcrypt
-
+import os
+from PyQt5.QtGui import QIcon
 
 # --- İMPORTLAR SONU ---
 
@@ -55,7 +56,7 @@ class LoginWindow(QMainWindow):
     def set_background(self):
         """Arka plan resmini tam ekrana sığdır ve ortala"""
         import os
-        banner_path = os.path.join(os.path.dirname(__file__), '..', '..', 'banner.jpg')
+        banner_path = os.path.join(os.path.dirname(__file__), '..', 'assets', 'banner.jpg')
         banner_path = os.path.abspath(banner_path)
 
         if os.path.exists(banner_path):
@@ -87,6 +88,13 @@ class LoginWindow(QMainWindow):
         """Arayüzü oluştur"""
         # Pencere ayarları
         self.setWindowTitle('Sınav Takvimi Sistemi - Giriş')
+
+        # Pencere simgesi ekle
+        icon_path = os.path.join(os.path.dirname(__file__), '..', 'assets', 'takvim.png')
+        icon_path = os.path.abspath(icon_path)
+
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
 
         # Ana widget
         central_widget = QWidget()

@@ -12,7 +12,8 @@ from student_system.utils.helpers import show_error_message, show_warning_messag
 from PyQt5.QtWidgets import QDialog, QFormLayout, QLineEdit
 from student_system.utils.helpers import show_error_message, show_info_message
 import bcrypt
-
+import os
+from PyQt5.QtGui import QIcon
 
 class ProfileSettingsDialog(QDialog):
     def __init__(self, user_id, parent=None):
@@ -131,6 +132,12 @@ class MainDashboard(QMainWindow):
         self.setWindowTitle(f"Sınav Takvimi Sistemi - {self.user['ad_soyad']}")
         self.setMinimumSize(1400, 900)
 
+        icon_path = os.path.join(os.path.dirname(__file__), '..', 'assets', 'takvim.png')
+        icon_path = os.path.abspath(icon_path)
+
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
@@ -193,9 +200,10 @@ class MainDashboard(QMainWindow):
 
         top_bar = self.create_modern_top_bar()
         stats = self.create_modern_statistics()
-
         container_layout.addWidget(top_bar)
         container_layout.addWidget(stats)
+        dashboarduni = self.create_dashboarduni()
+        container_layout.addWidget(dashboarduni)
         container_layout.addStretch()
 
         container.setLayout(container_layout)
@@ -568,6 +576,57 @@ class MainDashboard(QMainWindow):
 
         container.setLayout(layout)
         return container
+
+    def create_dashboarduni(self):
+        """Üniversite görselini transparan olarak gösterir"""
+        import os
+
+        frame = QFrame()
+        frame.setStyleSheet("background-color: transparent; border: none;")
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 20, 0, 0)
+        layout.setAlignment(Qt.AlignCenter)
+
+        # Görseli yükle
+        image_path = os.path.join(os.path.dirname(__file__), '..', 'assets', 'dashboarduni.png')
+        image_path = os.path.abspath(image_path)
+
+        if os.path.exists(image_path):
+            from PyQt5.QtGui import QPixmap
+
+            image_label = QLabel()
+            pixmap = QPixmap(image_path)
+
+            # Görseli boyutlandır (genişlik max 800px, yükseklik orantılı)
+            scaled_pixmap = pixmap.scaledToWidth(800, Qt.SmoothTransformation)
+
+            image_label.setPixmap(scaled_pixmap)
+            image_label.setAlignment(Qt.AlignCenter)
+
+            # Transparan efekt için opacity ayarla
+            image_label.setStyleSheet("""
+                QLabel {
+                    background-color: transparent;
+                    border: none;
+                }
+            """)
+
+            # Opacity efekti için QGraphicsOpacityEffect kullan
+            from PyQt5.QtWidgets import QGraphicsOpacityEffect
+            opacity_effect = QGraphicsOpacityEffect()
+            opacity_effect.setOpacity(0.3)  # 0.0 (görünmez) ile 1.0 (tam görünür) arası
+            image_label.setGraphicsEffect(opacity_effect)
+
+            layout.addWidget(image_label)
+        else:
+            # Görsel bulunamazsa boş bir alan bırak
+            placeholder = QLabel()
+            placeholder.setFixedHeight(200)
+            layout.addWidget(placeholder)
+
+        frame.setLayout(layout)
+        return frame
 
     def create_modern_stat_card(self, title, value, color, icon):
         card = QFrame()
