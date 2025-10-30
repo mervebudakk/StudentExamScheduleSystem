@@ -31,10 +31,6 @@ class LoginWindow(QMainWindow):
         screen_geom = QApplication.primaryScreen().availableGeometry()
         self.setGeometry(screen_geom)
         self.set_background()
-<<<<<<< Updated upstream
-=======
-        print("SHOW EVENT - window size:", self.size())
->>>>>>> Stashed changes
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
