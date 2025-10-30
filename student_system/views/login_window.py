@@ -90,7 +90,7 @@ class LoginWindow(QMainWindow):
         self.setWindowTitle('Sınav Takvimi Sistemi - Giriş')
 
         # Pencere simgesi ekle
-        icon_path = os.path.join(os.path.dirname(__file__), '..', 'assets', 'takvim.png')
+        icon_path = os.path.join(os.path.dirname(__file__), '..', 'assets', 'kalem.png')
         icon_path = os.path.abspath(icon_path)
 
         if os.path.exists(icon_path):

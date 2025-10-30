@@ -635,6 +635,8 @@ class ExamScheduler(QWidget):
 
     def _on_generate_clicked(self):
         try:
+            self.preview.setRowCount(0)
+
             constraints = self._collect_constraints()
 
             schedule = self._perform_scheduling(constraints)
@@ -748,6 +750,10 @@ class ExamScheduler(QWidget):
 
             for tarih in sorted_gunler:
 
+                MAX_SINAV_PER_GUN_PER_SINIF = 2
+                if gun_sinif_sayisi[tarih][ders['sinif']] >= MAX_SINAV_PER_GUN_PER_SINIF:
+                    continue
+
                 # --- A. ADIM: MEVCUT SLOTLARA YERLEŞMEYİ DENE (GREEDY) ---
                 if not c["ayni_anda_sinav_engelle"]:
                     gunun_slotlari = [
@@ -782,10 +788,6 @@ class ExamScheduler(QWidget):
                     break  # Gün arama (dış) döngüsünden de çık
 
                 # --- B. ADIM: YENİ SLOT OLUŞTUR (GÜNÜN SONUNA EKLE) ---
-
-                # 'Günde 1 Sınav' kuralı kontrolü
-                if gun_sinif_sayisi[tarih][ders['sinif']] > 0:
-                    continue  # Bu güne bu sınıftan zaten 1 sınav atandı, başka güne bak
 
                 baslangic_saati = gun_timeline[tarih]
 
