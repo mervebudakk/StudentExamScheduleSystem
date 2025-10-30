@@ -45,9 +45,6 @@ class LoginWindow(QMainWindow):
         # Arka planı güncelle
         self.set_background()
 
-        # Hızlı debug çıktısı
-        print("SHOW EVENT - window size:", self.size())
-
     def resizeEvent(self, event):
         """Pencere boyutu değiştiğinde arka planı yeniden ayarla"""
         super().resizeEvent(event)
