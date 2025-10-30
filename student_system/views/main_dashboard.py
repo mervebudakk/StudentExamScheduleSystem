@@ -68,7 +68,6 @@ class ProfileSettingsDialog(QDialog):
         new_pass = self.new_pass_input.text()
         confirm_pass = self.confirm_pass_input.text()
 
-        # 1. Doğrulamalar
         if not current_pass or not new_pass or not confirm_pass:
             show_error_message(self, "Hata", "Tüm alanlar doldurulmalıdır.")
             return
@@ -82,7 +81,6 @@ class ProfileSettingsDialog(QDialog):
             return
 
         try:
-            # 2. Mevcut şifreyi kontrol et
             db_result = Database.execute_query(
                 "SELECT sifre_hash FROM kullanicilar WHERE kullanici_id = %s",
                 (self.user_id,)
@@ -98,7 +96,6 @@ class ProfileSettingsDialog(QDialog):
                 show_error_message(self, "Hata", "Mevcut şifreniz yanlış.")
                 return
 
-            # 3. Yeni şifreyi hash'le ve güncelle
             new_hash = bcrypt.hashpw(new_pass.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
             Database.execute_non_query(
@@ -107,7 +104,7 @@ class ProfileSettingsDialog(QDialog):
             )
 
             show_info_message(self, "Başarılı", "Şifreniz başarıyla güncellendi.")
-            self.accept()  # Diyaloğu kapat
+            self.accept()
 
         except Exception as e:
             show_error_message(self, "Veritabanı Hatası", f"Bir hata oluştu: {e}")
@@ -159,9 +156,7 @@ class MainDashboard(QMainWindow):
             }
         """)
 
-        ### YENİ EKLENTİ: Arayüzü ilk açılışta yetkilendir ###
         self.update_ui_authorization()
-        ### YENİ EKLENTİ SONU ###
 
     def create_content_area(self):
         self.content_frame = QFrame()
@@ -249,10 +244,8 @@ class MainDashboard(QMainWindow):
             self.menu_buttons[item['text']] = btn
             layout.addWidget(btn)
 
-        ### YENİ EKLENTİ: PROFİL BUTONU ###
         self.profile_btn = self.create_menu_button('Profili Güncelle', '⚙️', self.open_profile_settings)
         layout.addWidget(self.profile_btn)
-        ### YENİ EKLENTİ SONU ###
 
         logout_btn = self.create_menu_button('Çıkış', '🚪', self.logout)
         logout_btn.setStyleSheet(logout_btn.styleSheet() + """
@@ -266,11 +259,10 @@ class MainDashboard(QMainWindow):
         return sidebar
 
     def create_admin_dept_selector(self):
-        """Admin için bölüm seçici QComboBox'u oluşturan frame'i döndürür."""
         frame = QFrame()
         frame.setStyleSheet("""
             QFrame {
-                padding: 10px 20px 20px 20px; /* Üst, Sağ, Alt, Sol */
+                padding: 10px 20px 20px 20px;
             }
         """)
         layout = QVBoxLayout()
@@ -297,10 +289,8 @@ class MainDashboard(QMainWindow):
             }
         """)
 
-        # ComboBox'u doldur
         self.populate_admin_combo()
 
-        # Sinyali bağla
         self.admin_dept_combo.currentIndexChanged.connect(self.on_admin_dept_change)
 
         layout.addWidget(label)
@@ -309,9 +299,7 @@ class MainDashboard(QMainWindow):
         return frame
 
     def populate_admin_combo(self):
-        """Admin QComboBox'unu veritabanındaki bölümlerle doldurur."""
         try:
-            # 'Bölüm Seç' seçeneğini başta ekle
             self.admin_dept_combo.addItem("Bölüm Seçilmedi", None)
 
             r = Database.execute_query("SELECT bolum_id, bolum_adi FROM bolumler WHERE aktif = true ORDER BY bolum_adi")
@@ -319,39 +307,26 @@ class MainDashboard(QMainWindow):
                 for bolum in r:
                     self.admin_dept_combo.addItem(bolum['bolum_adi'], bolum['bolum_id'])
 
-            # Başlangıçta ilk seçimi yap (Bölüm Seçilmedi)
-            self.on_admin_dept_change(0)  # 0. indeksi tetikle
+            self.on_admin_dept_change(0)
 
         except Exception as e:
             show_error_message(self, "Hata", f"Admin bölüm listesi yüklenemedi: {e}")
 
     def on_admin_dept_change(self, index):
-        """Admin bölüm seçimini değiştirdiğinde state'i günceller."""
         self.admin_selected_department['bolum_id'] = self.admin_dept_combo.itemData(index)
         self.admin_selected_department['bolum_adi'] = self.admin_dept_combo.itemText(index)
 
-        # Eğer "Bölüm Seçilmedi" (ID=None) seçilirse, adı da None yap
         if self.admin_selected_department['bolum_id'] is None:
             self.admin_selected_department['bolum_adi'] = None
 
-        # ÖNEMLİ: Bölüm değiştiğinde ana sayfa istatistiklerini ve
-        # iş akışı butonlarını (update_ui_authorization) güncelle
         self.update_ui_authorization()
         if self.active_menu_button and self.active_menu_button.text().strip() == '🏠 Ana Sayfa':
             self.show_dashboard_content()
 
     def get_scoped_user(self):
-        """
-        Mevcut 'self.user'ın bir kopyasını alır.
-        Eğer kullanıcı Admin ise, kopyanın 'bolum_id' ve 'bolum_adi' alanlarını
-        ComboBox'ta seçili olanla değiştirir.
-        """
-
-        # Orijinal user'ın bir kopyasını al (bu çok önemli)
         scoped_user = self.user.copy()
 
         if self.user['rol'] == 'Admin':
-            # Kopyalanan user'ın bolum_id ve bolum_adi'sini ez.
             scoped_user['bolum_id'] = self.admin_selected_department['bolum_id']
             scoped_user['bolum_adi'] = self.admin_selected_department['bolum_adi']
 
@@ -578,7 +553,6 @@ class MainDashboard(QMainWindow):
         return container
 
     def create_dashboarduni(self):
-        """Üniversite görselini transparan olarak gösterir"""
         import os
 
         frame = QFrame()
@@ -588,7 +562,6 @@ class MainDashboard(QMainWindow):
         layout.setContentsMargins(0, 20, 0, 0)
         layout.setAlignment(Qt.AlignCenter)
 
-        # Görseli yükle
         image_path = os.path.join(os.path.dirname(__file__), '..', 'assets', 'dashboarduni.png')
         image_path = os.path.abspath(image_path)
 
@@ -598,13 +571,11 @@ class MainDashboard(QMainWindow):
             image_label = QLabel()
             pixmap = QPixmap(image_path)
 
-            # Görseli boyutlandır (genişlik max 800px, yükseklik orantılı)
             scaled_pixmap = pixmap.scaledToWidth(800, Qt.SmoothTransformation)
 
             image_label.setPixmap(scaled_pixmap)
             image_label.setAlignment(Qt.AlignCenter)
 
-            # Transparan efekt için opacity ayarla
             image_label.setStyleSheet("""
                 QLabel {
                     background-color: transparent;
@@ -612,15 +583,13 @@ class MainDashboard(QMainWindow):
                 }
             """)
 
-            # Opacity efekti için QGraphicsOpacityEffect kullan
             from PyQt5.QtWidgets import QGraphicsOpacityEffect
             opacity_effect = QGraphicsOpacityEffect()
-            opacity_effect.setOpacity(0.3)  # 0.0 (görünmez) ile 1.0 (tam görünür) arası
+            opacity_effect.setOpacity(0.3)
             image_label.setGraphicsEffect(opacity_effect)
 
             layout.addWidget(image_label)
         else:
-            # Görsel bulunamazsa boş bir alan bırak
             placeholder = QLabel()
             placeholder.setFixedHeight(200)
             layout.addWidget(placeholder)
@@ -719,22 +688,13 @@ class MainDashboard(QMainWindow):
             r = Database.execute_query("SELECT COUNT(*) as count FROM sinavlar")
         return r[0]['count'] if r else 0
 
-    ### YENİ EKLENTİ: İş Akışı Buton Kontrolü ###
     def update_ui_authorization(self):
-        """
-        Proje dokümanındaki iş akışına göre butonları etkinleştirir/devre dışı bırakır.
-        Admin rolü bu kısıtlamalardan muaftır.
-        """
         try:
-            # Admin rolü (rol_adi == 'Admin') veya bölümü olmayan
-            # (bolum_id is None) kullanıcılar kısıtlanmaz.
             if self.user['rol'] == 'Admin' or self.user['bolum_id'] is None:
                 return
 
             bolum_id = self.user['bolum_id']
 
-            # 1. Derslik Kontrolü
-            # (Dokümana göre derslik yoksa sadece derslik yönetimi aktif olmalı)
             derslik_var = Database.check_classrooms_exist(bolum_id)
 
             if self.menu_buttons.get('Derslik Yönetimi'):
@@ -753,10 +713,8 @@ class MainDashboard(QMainWindow):
                 self.menu_buttons['Oturma Planı'].setEnabled(derslik_var)
 
             if not derslik_var:
-                return  # Derslik yoksa daha fazla kontrol yapma
+                return
 
-            # 2. Excel Yükleme Kontrolü
-            # (Sınav programı için hem ders hem öğrenci listesi yüklenmiş olmalı)
             ders_var = Database.check_courses_exist(bolum_id)
             ogrenci_var = Database.check_students_exist(bolum_id)
             exceller_yuklenmis = ders_var and ogrenci_var
@@ -768,10 +726,8 @@ class MainDashboard(QMainWindow):
                 self.menu_buttons['Oturma Planı'].setEnabled(exceller_yuklenmis)
 
             if not exceller_yuklenmis:
-                return  # Excel'ler yüklenmemişse daha fazla kontrol yapma
+                return
 
-            # 3. Sınav Programı Kontrolü
-            # (Oturma planı için sınav programı oluşturulmuş olmalı)
             program_var = Database.check_schedule_exists(bolum_id)
 
             if self.menu_buttons.get('Oturma Planı'):
@@ -779,7 +735,6 @@ class MainDashboard(QMainWindow):
 
         except Exception as e:
             print(f"HATA (update_ui_authorization): {e}")
-            # Bir hata olursa güvenli modda çoğu şeyi devre dışı bırak
             if self.menu_buttons.get('Ders Listesi İşlemleri'):
                 self.menu_buttons['Ders Listesi İşlemleri'].setEnabled(False)
             if self.menu_buttons.get('Sınav Programı'):
@@ -787,12 +742,8 @@ class MainDashboard(QMainWindow):
             if self.menu_buttons.get('Oturma Planı'):
                 self.menu_buttons['Oturma Planı'].setEnabled(False)
 
-    ### YENİ EKLENTİ SONU ###
-
     def show_dashboard(self):
-        ### YENİ EKLENTİ: Ana sayfaya her tıklandığında buton durumunu güncelle ###
         self.update_ui_authorization()
-        ### YENİ EKLENTİ SONU ###
         self.show_dashboard_content()
 
     def open_user_management(self):
@@ -893,12 +844,9 @@ class MainDashboard(QMainWindow):
             QMessageBox.critical(self, "Oturma Planı",
                                  f"Ekran yüklenirken hata:\n\n{e}\n\n{traceback.format_exc()}")
 
-    ### YENİ EKLENTİ: PROFİL PENCERESİNİ AÇMA ###
     def open_profile_settings(self):
-        # user['id']'yi diyaloga gönderiyoruz
-            dialog = ProfileSettingsDialog(self.user['id'], self)
-            dialog.exec_()
-        ### YENİ EKLENTİ SONU ###
+        dialog = ProfileSettingsDialog(self.user['id'], self)
+        dialog.exec_()
 
     def logout(self):
         if show_confirmation_dialog(self, 'Çıkış', 'Çıkış yapmak istediğinize emin misiniz?'):

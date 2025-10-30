@@ -7,27 +7,12 @@ from typing import List, Dict, Optional
 
 
 class Database:
-    """Veritabanı işlemleri için yönetici sınıf"""
-
     @staticmethod
     def get_connection():
-        """Veritabanı bağlantısı al"""
         return psycopg2.connect(**db_settings.psycopg2_params)
 
     @staticmethod
     def execute_query(query: str, params: tuple = None, fetch: bool = True):
-        """
-        SQL sorgusu çalıştır
-
-        Args:
-            query: SQL sorgusu
-            params: Parametreler
-            fetch: True ise sonuçları döndür, False ise etkilenen satır sayısını döndür
-
-        Returns:
-            fetch=True: List[Dict] (sonuçlar)
-            fetch=False: int (etkilenen satır sayısı)
-        """
         conn = Database.get_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
 
@@ -51,24 +36,10 @@ class Database:
 
     @staticmethod
     def execute_non_query(query: str, params: tuple = None) -> int:
-        """
-        Sonuç döndürmeyen DML sorguları (INSERT/UPDATE/DELETE) için yardımcı.
-        Dönüş: etkilenen satır sayısı
-        """
         return Database.execute_query(query, params, fetch=False)
 
     @staticmethod
     def authenticate_user(email: str, password: str) -> Optional[Dict]:
-        """
-        Kullanıcı girişi yap
-
-        Args:
-            email: E-posta adresi
-            password: Şifre
-
-        Returns:
-            Başarılı ise kullanıcı bilgileri, değilse None
-        """
         result = Database.execute_query("""
             SELECT k.kullanici_id, k.sifre_hash, k.ad_soyad, 
                    k.bolum_id, r.rol_adi, b.bolum_adi
@@ -83,10 +54,8 @@ class Database:
 
         user = result[0]
 
-        # Şifre kontrolü
         if bcrypt.checkpw(password.encode('utf-8'),
                           user['sifre_hash'].encode('utf-8')):
-            # Son giriş zamanını güncelle
             Database.execute_query("""
                 UPDATE kullanicilar 
                 SET son_giris = CURRENT_TIMESTAMP 
@@ -105,7 +74,6 @@ class Database:
 
     @staticmethod
     def get_user_permissions(user_id: int) -> List[str]:
-        """Kullanıcının yetkilerini getir"""
         result = Database.execute_query("""
             SELECT y.yetki_kodu 
             FROM kullanicilar k
@@ -119,7 +87,6 @@ class Database:
 
     @staticmethod
     def get_all_departments() -> List[Dict]:
-        """Tüm bölümleri getir"""
         return Database.execute_query("""
             SELECT bolum_id, bolum_adi, aktif 
             FROM bolumler 
@@ -129,9 +96,6 @@ class Database:
 
     @staticmethod
     def execute_many(query, data_list):
-        """
-        Birden fazla kayıt için toplu sorgu çalıştırır.
-        """
         conn = Database.get_connection()
         try:
             with conn.cursor() as cur:
@@ -145,7 +109,6 @@ class Database:
 
     @staticmethod
     def get_classrooms_by_department(bolum_id: int) -> List[Dict]:
-        """Bölüme ait derslikleri getir"""
         return Database.execute_query("""
             SELECT * FROM derslikler 
             WHERE bolum_id = %s AND aktif = true
@@ -154,7 +117,6 @@ class Database:
 
     @staticmethod
     def create_all_tables():
-        """Tüm tabloları oluştur"""
         conn = Database.get_connection()
         cur = conn.cursor()
 
@@ -178,7 +140,6 @@ class Database:
 
     @staticmethod
     def create_admin_user(email="admin@kocaeli.edu.tr", password="admin123"):
-        """Admin kullanıcısı oluştur"""
         conn = Database.get_connection()
         cur = conn.cursor()
 
@@ -215,11 +176,8 @@ class Database:
             cur.close()
             conn.close()
 
-    ### YENİ EKLENTİ: İş Akışı Kontrol Fonksiyonları ###
-
     @staticmethod
     def check_classrooms_exist(bolum_id: int) -> bool:
-        """Bölüm için en az bir derslik var mı?"""
         if bolum_id is None:
             return False
         r = Database.execute_query(
@@ -229,7 +187,6 @@ class Database:
 
     @staticmethod
     def check_courses_exist(bolum_id: int) -> bool:
-        """Bölüm için en az bir ders var mı?"""
         if bolum_id is None:
             return False
         r = Database.execute_query(
@@ -239,7 +196,6 @@ class Database:
 
     @staticmethod
     def check_students_exist(bolum_id: int) -> bool:
-        """Bölüm için en az bir öğrenci var mı?"""
         if bolum_id is None:
             return False
         r = Database.execute_query(
@@ -249,7 +205,6 @@ class Database:
 
     @staticmethod
     def check_schedule_exists(bolum_id: int) -> bool:
-        """Bölüm için en az bir sınav programı var mı?"""
         if bolum_id is None:
             return False
         r = Database.execute_query(
@@ -257,14 +212,9 @@ class Database:
         )
         return r[0]['c'] > 0 if r else False
 
-    ### YENİ EKLENTİ SONU ###
-
-
-# Eski isimlendirme için backward compatibility
 DatabaseManager = Database
 
 if __name__ == "__main__":
-    """Test"""
     print("Veritabanı bağlantısı test ediliyor...")
     conn = Database.get_connection()
     print("✅ Bağlantı başarılı!")

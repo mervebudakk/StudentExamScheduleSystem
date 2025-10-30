@@ -163,7 +163,7 @@ class ClassroomManagement(QWidget):
         self.table.setHorizontalHeaderLabels(
             ["Kod", "Ad", "Kapasite", "Enine", "Boyuna", "Yapı", "Bölüm", "İşlemler"]
         )
-        self.table.horizontalHeader().setStretchLastSection(False)  # StretchLastSection'ı kapatalım
+        self.table.horizontalHeader().setStretchLastSection(False)
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(

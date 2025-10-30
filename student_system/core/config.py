@@ -1,20 +1,13 @@
-# student_system/core/config.py
-"""
-Veritabanı konfigürasyon ayarları
-Tailscale üzerinden bağlantı için .env dosyasından okur
-"""
 from dataclasses import dataclass
 from dotenv import load_dotenv, find_dotenv
 import os
 from pathlib import Path
 
-# .env dosyasını yükle
 load_dotenv(find_dotenv(), override=False)
 
 
 @dataclass(frozen=True)
 class DatabaseSettings:
-    """Veritabanı bağlantı ayarları"""
     host: str
     port: int
     name: str
@@ -23,12 +16,10 @@ class DatabaseSettings:
 
     @property
     def connection_string(self) -> str:
-        """PostgreSQL connection string oluştur"""
         return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
 
     @property
     def psycopg2_params(self) -> dict:
-        """psycopg2 için parametreler"""
         return {
             'host': self.host,
             'port': self.port,
@@ -40,14 +31,12 @@ class DatabaseSettings:
 
 @dataclass(frozen=True)
 class AppSettings:
-    """Uygulama genel ayarları"""
     app_name: str = "Dinamik Sınav Takvimi Sistemi"
     version: str = "1.0.0"
     debug: bool = False
 
 
 def get_database_settings() -> DatabaseSettings:
-    """Veritabanı ayarlarını .env'den oku"""
     return DatabaseSettings(
         host=os.getenv("DB_HOST", "localhost"),
         port=int(os.getenv("DB_PORT", "5432")),
@@ -58,18 +47,14 @@ def get_database_settings() -> DatabaseSettings:
 
 
 def get_app_settings() -> AppSettings:
-    """Uygulama ayarlarını al"""
     return AppSettings(
         debug=os.getenv("DEBUG", "False").lower() == "true"
     )
 
-
-# Singleton instance'lar
 db_settings = get_database_settings()
 app_settings = get_app_settings()
 
 if __name__ == "__main__":
-    """Test: Config dosyasını çalıştırınca ayarları göster"""
     print("=" * 60)
     print("VERİTABANI AYARLARI")
     print("=" * 60)

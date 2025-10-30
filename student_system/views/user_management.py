@@ -262,12 +262,10 @@ class UserManagement(QWidget):
     def deactivate_user(self):
         email = self.get_selected_email()
         if not email:
-            # QMessageBox.warning(...) <-- DEĞİŞTİ
             show_warning_message(self, "Uyarı", "Lütfen bir kullanıcı seçin!")
             return
 
         Database.execute_non_query("UPDATE Kullanicilar SET aktif = FALSE WHERE email = %s", (email,))
-        # QMessageBox.information(...) <-- DEĞİŞTİ
         show_info_message(self, "Başarılı", "Kullanıcı pasif hale getirildi.")
         self.load_users()
 
@@ -422,13 +420,11 @@ Lütfen ilk girişte şifrenizi değiştiriniz.
         bolum_id = self.cmb_dep.currentData()
 
         if not name or not email:
-            # QMessageBox.warning(...) <-- DEĞİŞTİ
             show_warning_message(self, "Hata", "Tüm alanları doldurun!")
             return
 
         exists = Database.execute_query("SELECT 1 FROM Kullanicilar WHERE email = %s", (email,))
         if exists:
-            # QMessageBox.warning(...) <-- DEĞİŞTİ
             show_warning_message(self, "Hata", "Bu email zaten kayıtlı!")
             return
 
@@ -441,10 +437,8 @@ Lütfen ilk girişte şifrenizi değiştiriniz.
         """, (email, hashed, name, bolum_id))
 
         if self.send_email(email, password):
-            # QMessageBox.information(...) <-- DEĞİŞTİ
             show_info_message(self, "Başarılı", "Kullanıcı eklendi ve şifre email ile gönderildi.")
         else:
-            # QMessageBox.warning(...) <-- DEĞİŞTİ
             show_warning_message(self, "Uyarı", "Kullanıcı eklendi fakat mail gönderilemedi!")
 
         self.close()

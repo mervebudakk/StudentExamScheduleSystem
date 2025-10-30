@@ -20,7 +20,6 @@ class ExamScheduler(QWidget):
     def __init__(self, user, parent=None):
         super().__init__(parent)
         self.user = user
-        # İstisna süreleri (ders_id -> dakika) saklamak için
         self.lesson_exceptions = {}
 
         self._init_ui()
@@ -72,7 +71,7 @@ class ExamScheduler(QWidget):
         parent_layout.addWidget(scroll_area, 2)
 
     def _create_lesson_selection_group(self, parent_layout):
-        group = QGroupBox("Ders Seçimi (İstisna Süre için Sağ Tıkla)")  # <-- YENİ
+        group = QGroupBox("Ders Seçimi (İstisna Süre için Sağ Tıkla)")
         group.setStyleSheet("""
             QGroupBox {
                 background-color: white;
@@ -114,10 +113,8 @@ class ExamScheduler(QWidget):
             }
         """)
 
-        # --- YENİ: Sağ Tık Menüsü ---
         self.lesson_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.lesson_list.customContextMenuRequested.connect(self._show_lesson_context_menu)
-        # --- BİTTİ ---
 
         layout.addWidget(self.lesson_list)
 
@@ -170,7 +167,6 @@ class ExamScheduler(QWidget):
 
         parent_layout.addWidget(group)
 
-    # --- YENİ FONKSİYON: Sağ Tık Menüsünü Göster ---
     def _show_lesson_context_menu(self, pos):
         item = self.lesson_list.itemAt(pos)
         if not item:
@@ -186,7 +182,6 @@ class ExamScheduler(QWidget):
 
         menu.exec_(self.lesson_list.mapToGlobal(pos))
 
-    # --- YENİ FONKSİYON: İstisna Süresi Ayarla ---
     def _set_exception_duration(self, item):
         ders_data = item.data(Qt.UserRole)
         ders_id = ders_data['ders_id']
@@ -206,15 +201,13 @@ class ExamScheduler(QWidget):
 
         if ok:
             self.lesson_exceptions[ders_id] = duration
-            # Orijinal metni koruyarak istisnayı ekle
             original_text = f"{ders_data['ders_kodu']} – {ders_data['ders_adi']} (Sınıf: {ders_data['sinif']})"
             item.setText(f"{original_text}  [İSTİSNA: {duration} dk]")
-            item.setForeground(QColor("#d97706"))  # Rengi değiştir
+            item.setForeground(QColor("#d97706"))
             font = item.font()
             font.setBold(True)
             item.setFont(font)
 
-    # --- YENİ FONKSİYON: İstisna Süreyi Sıfırla ---
     def _reset_exception_duration(self, item):
         ders_data = item.data(Qt.UserRole)
         ders_id = ders_data['ders_id']
@@ -224,7 +217,7 @@ class ExamScheduler(QWidget):
 
         original_text = f"{ders_data['ders_kodu']} – {ders_data['ders_adi']} (Sınıf: {ders_data['sinif']})"
         item.setText(original_text)
-        item.setForeground(QColor("#2c3e50"))  # Rengi sıfırla
+        item.setForeground(QColor("#2c3e50"))
         font = item.font()
         font.setBold(False)
         item.setFont(font)
@@ -565,7 +558,6 @@ class ExamScheduler(QWidget):
         """)
 
     def _load_lessons(self):
-        # Programı her yeniden yüklediğimizde istisna listesini temizle
         self.lesson_exceptions.clear()
 
         rows = Database.execute_query("""
@@ -593,15 +585,13 @@ class ExamScheduler(QWidget):
         for i in range(self.lesson_list.count()):
             item = self.lesson_list.item(i)
             if item.checkState() == Qt.Checked:
-                ders_data = item.data(Qt.UserRole).copy()  # Kopyasını al
-                # İstisna süreyi dersin verisine ekle
+                ders_data = item.data(Qt.UserRole).copy()
                 ders_data['istisna_sure'] = self.lesson_exceptions.get(ders_data['ders_id'])
                 selected.append(ders_data)
 
         if not selected:
             raise ValueError("Programa dahil edilecek en az bir ders seçmelisiniz.")
 
-        # Döküman kuralı: Aynı sınıfları bir arada tutmak için sırala
         selected.sort(key=lambda d: (d['sinif'], d['ders_kodu']))
 
         d_from = self.date_from.date().toPyDate()
@@ -655,53 +645,37 @@ class ExamScheduler(QWidget):
             QMessageBox.critical(self, "Hata", f"Program oluşturulurken hata: {str(e)}")
 
     def _add_time(self, current_time, minutes_to_add):
-        """ Bir datetime.time nesnesine dakika ekler, tarihi yok sayar. """
         dummy_date = datetime(2000, 1, 1, current_time.hour, current_time.minute, current_time.second)
         new_datetime = dummy_date + timedelta(minutes=minutes_to_add)
         return new_datetime.time()
 
-    # --- YARDIMCI FONKSİYON 2 (DEĞİŞİKLİK YOK, AMA GEREKLİ) ---
     def _check_student_conflict(self, ders_ogrencileri, sinav_tarihi, sinav_baslangic, sinav_bitis,
                                 ogrenci_programi):
-        """ Verilen dersin öğrencilerinin, o zaman aralığında başka bir sınavı var mı? """
-
         for ogrenci_id in ders_ogrencileri:
             for kayitli_tarih, kayitli_baslangic, kayitli_bitis in ogrenci_programi[ogrenci_id]:
 
                 if sinav_tarihi != kayitli_tarih:
-                    continue  # Farklı gün, çakışma olamaz
+                    continue
 
-                # Zaman aralığı çakışma kontrolü
-                # (StartA < EndB) and (EndA > StartB)
                 if (sinav_baslangic < kayitli_bitis) and (sinav_bitis > kayitli_baslangic):
-                    return True  # Çakışma var!
+                    return True
 
-        return False  # Çakışma yok
+        return False
 
-    # --- YARDIMCI FONKSİYON 3 (DEĞİŞİKLİK YOK, AMA GEREKLİ) ---
     def _update_student_schedule(self, ders_ogrencileri, sinav_tarihi, sinav_baslangic, sinav_bitis_with_break,
                                  ogrenci_programi):
-        """ Öğrencilerin programına bu sınavı (ve bekleme süresini) ekler. """
-
         kayit = (sinav_tarihi, sinav_baslangic, sinav_bitis_with_break)
         for ogrenci_id in ders_ogrencileri:
             ogrenci_programi[ogrenci_id].append(kayit)
-
-        # --- GÜNCELLENMİŞ ÇEKİRDEK FONKSİYON ---
-        # Not: _add_time, _check_student_conflict, ve _update_student_schedule
-        #      yardımcı fonksiyonlarının class'ınızda tanımlı olduğunu varsayıyorum.
 
     def _perform_scheduling(self, c):
         conn = Database.get_connection()
         cur = conn.cursor()
 
-        # 1. Eski sınav kayıtlarını temizle
         cur.execute("""
             DELETE FROM Sinavlar 
             WHERE bolum_id = %s AND sinav_turu = %s
         """, (c["bolum_id"], c["sinav_turu"]))
-
-        # 2. Gerekli verileri hazırla
 
         ders_ogrenci_map = defaultdict(set)
         ders_idler = [d['ders_id'] for d in c['secili_dersler']]
@@ -713,10 +687,7 @@ class ExamScheduler(QWidget):
                 WHERE ders_id IN ({placeholders})
             """, tuple(ders_idler))
             for row in cur.fetchall():
-                # Ders ID ve Öğrenci ID'nin int olduğundan emin ol
                 ders_ogrenci_map[int(row[0])].add(int(row[1]))
-
-        # 3. Zamanlama için veri yapılarını kur
 
         ogrenci_programi = defaultdict(list)
         gun_timeline = {}
@@ -737,7 +708,6 @@ class ExamScheduler(QWidget):
         slot_programi = defaultdict(list)
         schedule = []
 
-        # 4. Dersleri Planlama Döngüsü
         for ders in c["secili_dersler"]:
             ders_suresi = ders['istisna_sure'] or c['varsayilan_sure']
             ders_ogrencileri = ders_ogrenci_map.get(ders['ders_id'], set())
@@ -754,7 +724,6 @@ class ExamScheduler(QWidget):
                 if gun_sinif_sayisi[tarih][ders['sinif']] >= MAX_SINAV_PER_GUN_PER_SINIF:
                     continue
 
-                # --- A. ADIM: MEVCUT SLOTLARA YERLEŞMEYİ DENE (GREEDY) ---
                 if not c["ayni_anda_sinav_engelle"]:
                     gunun_slotlari = [
                         (saat, dersler) for (t, saat), dersler in slot_programi.items() if t == tarih
@@ -782,12 +751,10 @@ class ExamScheduler(QWidget):
                             )
                             gun_sinif_sayisi[tarih][ders['sinif']] += 1
                             placed = True
-                            break  # Slot arama (iç) döngüsünden çık
+                            break
 
                 if placed:
-                    break  # Gün arama (dış) döngüsünden de çık
-
-                # --- B. ADIM: YENİ SLOT OLUŞTUR (GÜNÜN SONUNA EKLE) ---
+                    break
 
                 baslangic_saati = gun_timeline[tarih]
 
@@ -810,24 +777,19 @@ class ExamScheduler(QWidget):
                     gun_timeline[tarih] = bitis_saati_ara_dahil
                     gun_sinif_sayisi[tarih][ders['sinif']] += 1
                     placed = True
-                    break  # Gün arama (dış) döngüsünden çık
+                    break
 
-            # *** BAŞARISIZLIK DURUMU KONTROLÜ (GENEL HALE GETİRİLDİ) ***
             if not placed:
                 cur.close()
                 conn.close()
 
-                # Başarısız olan dersin bilgilerini al
                 failing_sinif = ders['sinif']
                 failing_ders_adi = ders['ders_adi']
                 gun_sayisi = len(gun_timeline)
 
-                # Başarısız olan dersin sınıfına ait planlanacak toplam ders sayısını bul
                 failing_sinif_ders_sayisi = sum(1 for d in c['secili_dersler'] if d['sinif'] == failing_sinif)
 
-                # Bu sınıftaki tüm öğrencilerin tüm dersleri alıp almadığını kontrol et
-                # (Bu, 1. Sınıf senaryosu gibi özel durumlar için)
-                is_full_overlap = True  # Varsayılan olarak tam çakışma varsay
+                is_full_overlap = True
                 ogrenciler_bu_sinifta = set()
 
                 for d in c['secili_dersler']:
@@ -837,13 +799,9 @@ class ExamScheduler(QWidget):
                 if ogrenciler_bu_sinifta:
                     for d in c['secili_dersler']:
                         if d['sinif'] == failing_sinif:
-                            # Eğer bu sınıftaki öğrencilerin tamamı bu dersi almıyorsa,
-                            # tam çakışma yoktur.
                             if not ogrenciler_bu_sinifta.issubset(ders_ogrenci_map.get(d['ders_id'], set())):
                                 is_full_overlap = False
-                                # break # Not: Bu kontrol %100 doğru olmayabilir ama iyi bir tahmin
 
-                # Eğer "günde 1 sınav" kuralı yüzünden sığmıyorsa:
                 if (failing_sinif_ders_sayisi > gun_sayisi) and is_full_overlap:
                     raise ValueError(
                         f"GÜN YETERSİZ! '{failing_ders_adi}' dersi atanamadı.\n\n"
@@ -852,7 +810,6 @@ class ExamScheduler(QWidget):
                         "Lütfen tarih aralığını genişletin."
                     )
                 else:
-                    # Diğer tüm çakışmalar (alttan ders, vb.) veya zaman darlığı için
                     raise ValueError(
                         f"'{failing_ders_adi}' dersi için uygun zaman bulunamadı! \n\n"
                         f"Sebep: Tarih aralığı, {failing_sinif}. sınıfın diğer dersleri ve "
@@ -861,7 +818,6 @@ class ExamScheduler(QWidget):
                         "Lütfen tarih aralığını genişletin."
                     )
 
-        # 5. Planlanan sınavları veritabanına yaz
         for ders, tarih, saat_obj in schedule:
             cur.execute("""
                 INSERT INTO Sinavlar 
@@ -1057,20 +1013,16 @@ class ExamScheduler(QWidget):
             sinavlar = cur.fetchall()
 
             if not sinavlar:
-                # Bu artık bir hata değil, program daha oluşmamış olabilir
-                # QMessageBox.warning(self, "Uyarı", "Henüz sınav bulunamadı!")
                 cur.close()
                 conn.close()
                 return
 
-            # --- YENİ: Önceki derslik atamalarını temizle ---
             sinav_idler = [s[0] for s in sinavlar]
             if sinav_idler:
                 cur.execute(f"""
                     DELETE FROM SinavDerslikleri 
                     WHERE sinav_id IN ({','.join(['%s'] * len(sinav_idler))})
                 """, tuple(sinav_idler))
-            # --- BİTTİ ---
 
             cur.execute("""
                 SELECT ders_id, COUNT(ogrenci_id) as ogrenci_sayisi
@@ -1079,14 +1031,12 @@ class ExamScheduler(QWidget):
             """)
             ogrenci_sayilari = {r[0]: r[1] for r in cur.fetchall()}
 
-            # derslik_programi: derslik_id -> {tarih -> [saat, ...]}
             derslik_programi = defaultdict(lambda: defaultdict(list))
 
             toplam_atama = 0
             uyari_listesi = []
 
             for sinav_id, ders_id, tarih, saat, ders_adi in sinavlar:
-                # Tip dönüşümlerini garantile (veritabanından farklı gelebilir)
                 saat_time = saat if isinstance(saat, time) else datetime.strptime(str(saat), "%H:%M:%S").time()
                 tarih_date = tarih if isinstance(tarih, type(date.today())) else tarih.date()
 
@@ -1115,7 +1065,6 @@ class ExamScheduler(QWidget):
                 toplam_atanan_kapasite = 0
 
                 for derslik_id, derslik_adi, kapasite in gereken_derslikler:
-                    # Bu dersliği bu (tarih, saat) için meşgul olarak işaretle
                     derslik_programi[derslik_id][tarih_date].append(saat_time)
 
                     cur.execute("""
@@ -1136,8 +1085,6 @@ class ExamScheduler(QWidget):
                         f"atanan kapasite: {toplam_atanan_kapasite} → {derslik_str} (KAPASİTE YETERSİZ!)"
                     )
                 else:
-                    # Başarılı atama (çok kalabalık yapmaması için loglama kapatılabilir)
-                    # uyari_listesi.append(f"✅ {ders_adi} ({ogrenci_sayisi} ögr) → {derslik_str}")
                     pass
 
             conn.commit()
@@ -1147,15 +1094,11 @@ class ExamScheduler(QWidget):
             mesaj = f"Toplam {toplam_atama} derslik ataması yapıldı."
 
             if uyari_listesi:
-                # Sadece ❌ ve ⚠️ içeren uyarıları göster
                 onemli_uyarilar = [u for u in uyari_listesi if "❌" in u or "⚠️" in u]
                 if onemli_uyarilar:
                     mesaj += f"\n\n⚠️ {len(onemli_uyarilar)} ÖNEMLİ UYARI:\n" + "\n".join(onemli_uyarilar[:10])
                     if len(onemli_uyarilar) > 10:
                         mesaj += f"\n... ve {len(onemli_uyarilar) - 10} uyarı daha"
-
-            # Çok fazla uyarı penceresi çıkmaması için bu kapatılabilir
-            # QMessageBox.information(self, "Derslik Atama Tamamlandı", mesaj)
 
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Derslik atama hatası: {str(e)}")
@@ -1163,32 +1106,27 @@ class ExamScheduler(QWidget):
     def _select_optimal_classrooms(self, derslikler, ogrenci_sayisi, tarih_date,
                                    saat_time, derslik_programi):
 
-        # O tarih ve saatte boş olan derslikleri bul
         uygun_derslikler = []
         for derslik_id, derslik_adi, kapasite in derslikler:
             gunluk_program = derslik_programi[derslik_id].get(tarih_date, [])
 
             if saat_time in gunluk_program:
-                continue  # Bu derslik bu saatte dolu
+                continue
 
             uygun_derslikler.append((derslik_id, derslik_adi, kapasite))
 
         if not uygun_derslikler:
             return []
 
-        # Döküman kuralı: "Derslik kullanımı en aza indirgeyecek şekilde yerleştirme"
-        # Bu, öğrenci sayısını karşılayana kadar en büyük derslikleri seçerek sağlanır.
-
         secilen_derslikler = []
         kalan_ogrenci = ogrenci_sayisi
 
-        # Uygun derslikler zaten kapasiteye göre (büyükten küçüğe) sıralı
         for derslik in uygun_derslikler:
             derslik_id, derslik_adi, kapasite = derslik
             secilen_derslikler.append(derslik)
             kalan_ogrenci -= kapasite
 
             if kalan_ogrenci <= 0:
-                break  # Yeterli kapasiteye ulaşıldı
+                break
 
         return secilen_derslikler

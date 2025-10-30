@@ -7,9 +7,6 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFileDial
 from PyQt5.QtGui import QFont
 from student_system.core.database import Database
 
-# ... (HEADER_SYNONYMS, normalize, canonical_header fonksiyonları ve StudentUploadWorker sınıfı aynı kalabilir) ...
-# ... (Bu kısımları projenizden değiştirmeden alabilirsiniz) ...
-
 HEADER_SYNONYMS = {
     'ogrenci_no': {'ogrenci no', 'ogrencino', 'ogrenci_numarasi', 'numara', 'öğrenci no', 'öğrenci numarası', 'no'},
     'ad_soyad': {'ad soyad', 'ogrenci ad soyad', 'öğrenci adı', 'öğrenci isim', 'isim', 'ad', 'soyad'},
@@ -112,14 +109,10 @@ class StudentListUploader(QWidget):
             self.table.setItem(row, 1, QTableWidgetItem(s["ad_soyad"]))
             self.table.setItem(row, 2, QTableWidgetItem(str(s["sinif"])))
 
-    # DEĞİŞTİ: Orijinal search_student fonksiyonunun adı ve görevi değişti.
-    # Bu fonksiyon artık sadece arama kutusundan gelen metni alır ve detay gösterme fonksiyonunu çağırır.
     def search_student(self):
         ogr_no = self.search_box.text().strip()
-        self.show_student_details(ogr_no)  # YENİ EKLENDİ: Detay gösterme fonksiyonunu çağır
+        self.show_student_details(ogr_no)
 
-    # YENİ EKLENDİ: Öğrenci detaylarını gösterme mantığı bu fonksiyona taşındı.
-    # Hem "Ara" butonu hem de tablodan tıklama bu fonksiyonu kullanacak.
     def show_student_details(self, ogr_no):
         if not ogr_no:
             self.show_warning("Uyarı", "Lütfen bir öğrenci numarası girin.")
@@ -167,30 +160,22 @@ class StudentListUploader(QWidget):
         html += "</div>"
         self.result_area.setHtml(html)
 
-    # YENİ EKLENDİ: Arama kutusuna yazıldıkça tabloyu filtreleyen fonksiyon
     def filter_student_table(self, filter_text):
         filter_text = filter_text.strip()
         for row in range(self.table.rowCount()):
-            item = self.table.item(row, 0)  # Öğrenci No sütunu (0. indeks)
+            item = self.table.item(row, 0)
             if item:
                 student_id = item.text()
-                # Eğer öğrenci no, filtre metni ile BAŞLAMIYORSA satırı gizle
                 if not student_id.startswith(filter_text):
                     self.table.setRowHidden(row, True)
                 else:
                     self.table.setRowHidden(row, False)
 
-    # YENİ EKLENDİ: Tablodaki bir satıra tıklandığında çalışan fonksiyon
     def on_table_row_clicked(self, row, column):
-        # 0. sütundaki (Öğrenci No) hücreden veriyi al
         ogr_no_item = self.table.item(row, 0)
         if ogr_no_item:
             ogr_no = ogr_no_item.text()
-
-            # Arama kutusunun metnini tılanan öğrenci no ile güncelle
             self.search_box.setText(ogr_no)
-
-            # Öğrencinin detaylarını (derslerini) göster
             self.show_student_details(ogr_no)
 
     def __init__(self, user, parent=None):
@@ -247,9 +232,7 @@ class StudentListUploader(QWidget):
                 }
             """)
 
-        # Sinyal bağlantıları
         self.search_box.returnPressed.connect(self.search_student)
-        # YENİ EKLENDİ: Arama kutusundaki metin her değiştiğinde filtre fonksiyonunu çağır
         self.search_box.textChanged.connect(self.filter_student_table)
 
         search_btn = QPushButton("Ara")
@@ -338,7 +321,6 @@ class StudentListUploader(QWidget):
                 }
             """)
 
-        # YENİ EKLENDİ: Tabloya tıklama sinyalini ilgili fonksiyona bağla
         self.table.cellClicked.connect(self.on_table_row_clicked)
 
         layout.addWidget(self.table)
@@ -507,7 +489,6 @@ class StudentListUploader(QWidget):
         self.progress.setVisible(False)
         self.show_error("Hata", f"Yükleme sırasında hata oluştu:\n{msg}")
 
-    # ... (show_error, show_success, show_warning metodları aynı kalabilir) ...
     def show_error(self, title, message):
         msg = QMessageBox(self)
         msg.setIcon(QMessageBox.Critical)

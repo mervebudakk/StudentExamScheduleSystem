@@ -1,12 +1,8 @@
-"""
-Tailscale üzerinden PostgreSQL bağlantısını test et
-"""
 import psycopg2
 from student_system.core.config import db_settings
 
 
 def test_connection():
-    """Veritabanı bağlantısını test et"""
     print("=" * 60)
     print("VERİTABANI BAĞLANTI TESTİ")
     print("=" * 60)
@@ -17,11 +13,9 @@ def test_connection():
     print("=" * 60)
 
     try:
-        # Bağlantı kur
         print("\n⏳ Bağlanılıyor...")
         conn = psycopg2.connect(**db_settings.psycopg2_params)
 
-        # Test sorgusu
         cur = conn.cursor()
         cur.execute("SELECT version();")
         version = cur.fetchone()
@@ -30,7 +24,6 @@ def test_connection():
         print(f"\nPostgreSQL Version:")
         print(version[0])
 
-        # Mevcut tabloları listele
         cur.execute("""
             SELECT table_name 
             FROM information_schema.tables 

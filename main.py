@@ -1,11 +1,7 @@
-"""
-Dinamik Sınav Takvimi Sistemi - Ana Başlatma
-"""
 import sys
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QFont
 
-# Import'u try-except içine alalım
 try:
     from student_system.views.login_window import LoginWindow
 except ImportError as e:
@@ -18,14 +14,11 @@ except ImportError as e:
 
 
 def main():
-    """Uygulamayı başlat"""
     app = QApplication(sys.argv)
 
-    # Global font
     font = QFont('Segoe UI', 10)
     app.setFont(font)
 
-    # Login penceresi
     try:
         login_window = LoginWindow()
         login_window.show()
