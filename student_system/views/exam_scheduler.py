@@ -1,23 +1,27 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QListWidget, QListWidgetItem,
     QGroupBox, QFormLayout, QDateEdit, QCheckBox, QComboBox, QSpinBox, QTableWidget,
-    QTableWidgetItem, QMessageBox, QFileDialog, QScrollArea, QFrame, QHeaderView
+    QTableWidgetItem, QMessageBox, QFileDialog, QScrollArea, QFrame, QHeaderView,
+    QMenu, QInputDialog
 )
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QFont, QColor, QPalette
 from student_system.core.database import Database
 import json
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, time, date
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 import pandas as pd
+from collections import defaultdict
 
 
 class ExamScheduler(QWidget):
     def __init__(self, user, parent=None):
         super().__init__(parent)
         self.user = user
+        # İstisna süreleri (ders_id -> dakika) saklamak için
+        self.lesson_exceptions = {}
 
         self._init_ui()
         self._apply_modern_styles()
@@ -68,7 +72,7 @@ class ExamScheduler(QWidget):
         parent_layout.addWidget(scroll_area, 2)
 
     def _create_lesson_selection_group(self, parent_layout):
-        group = QGroupBox("Ders Seçimi")
+        group = QGroupBox("Ders Seçimi (İstisna Süre için Sağ Tıkla)")  # <-- YENİ
         group.setStyleSheet("""
             QGroupBox {
                 background-color: white;
@@ -109,6 +113,12 @@ class ExamScheduler(QWidget):
                 background-color: #e8f0fe;
             }
         """)
+
+        # --- YENİ: Sağ Tık Menüsü ---
+        self.lesson_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.lesson_list.customContextMenuRequested.connect(self._show_lesson_context_menu)
+        # --- BİTTİ ---
+
         layout.addWidget(self.lesson_list)
 
         button_layout = QHBoxLayout()
@@ -159,6 +169,65 @@ class ExamScheduler(QWidget):
         layout.addLayout(button_layout)
 
         parent_layout.addWidget(group)
+
+    # --- YENİ FONKSİYON: Sağ Tık Menüsünü Göster ---
+    def _show_lesson_context_menu(self, pos):
+        item = self.lesson_list.itemAt(pos)
+        if not item:
+            return
+
+        menu = QMenu(self)
+
+        set_action = menu.addAction("İstisna Sınav Süresi Belirle...")
+        reset_action = menu.addAction("Varsayılan Süreye Dön")
+
+        set_action.triggered.connect(lambda: self._set_exception_duration(item))
+        reset_action.triggered.connect(lambda: self._reset_exception_duration(item))
+
+        menu.exec_(self.lesson_list.mapToGlobal(pos))
+
+    # --- YENİ FONKSİYON: İstisna Süresi Ayarla ---
+    def _set_exception_duration(self, item):
+        ders_data = item.data(Qt.UserRole)
+        ders_id = ders_data['ders_id']
+        ders_adi = ders_data['ders_adi']
+
+        current_duration = self.lesson_exceptions.get(ders_id, self.spin_duration.value())
+
+        duration, ok = QInputDialog.getInt(
+            self,
+            "İstisna Süre",
+            f"'{ders_adi}' için sınav süresi (dk):",
+            value=current_duration,
+            min=15,
+            max=240,
+            step=15
+        )
+
+        if ok:
+            self.lesson_exceptions[ders_id] = duration
+            # Orijinal metni koruyarak istisnayı ekle
+            original_text = f"{ders_data['ders_kodu']} – {ders_data['ders_adi']} (Sınıf: {ders_data['sinif']})"
+            item.setText(f"{original_text}  [İSTİSNA: {duration} dk]")
+            item.setForeground(QColor("#d97706"))  # Rengi değiştir
+            font = item.font()
+            font.setBold(True)
+            item.setFont(font)
+
+    # --- YENİ FONKSİYON: İstisna Süreyi Sıfırla ---
+    def _reset_exception_duration(self, item):
+        ders_data = item.data(Qt.UserRole)
+        ders_id = ders_data['ders_id']
+
+        if ders_id in self.lesson_exceptions:
+            del self.lesson_exceptions[ders_id]
+
+        original_text = f"{ders_data['ders_kodu']} – {ders_data['ders_adi']} (Sınıf: {ders_data['sinif']})"
+        item.setText(original_text)
+        item.setForeground(QColor("#2c3e50"))  # Rengi sıfırla
+        font = item.font()
+        font.setBold(False)
+        item.setFont(font)
 
     def _create_date_settings_group(self, parent_layout):
         group = QGroupBox("Tarih ve Gün Ayarları")
@@ -347,10 +416,14 @@ class ExamScheduler(QWidget):
                 font-size: 14px;
             }
         """)
+        self.chk_no_overlap.setToolTip(
+            "İşaretlenirse, aynı anda sadece bir sınav yapılır.\n"
+            "İşaretlenmezse, öğrenci çakışması olmayan sınavlar aynı saate atanır."
+        )
 
         form_layout.addRow("Sınav Türü:", self.cmb_type)
-        form_layout.addRow("Sınav Süresi:", self.spin_duration)
-        form_layout.addRow("Ara:", self.spin_break)
+        form_layout.addRow("Varsayılan Süre:", self.spin_duration)
+        form_layout.addRow("Sınav Arası:", self.spin_break)
         form_layout.addRow(self.chk_no_overlap)
 
         parent_layout.addWidget(group)
@@ -492,6 +565,9 @@ class ExamScheduler(QWidget):
         """)
 
     def _load_lessons(self):
+        # Programı her yeniden yüklediğimizde istisna listesini temizle
+        self.lesson_exceptions.clear()
+
         rows = Database.execute_query("""
             SELECT ders_id, ders_kodu, ders_adi, sinif
             FROM dersler
@@ -517,10 +593,16 @@ class ExamScheduler(QWidget):
         for i in range(self.lesson_list.count()):
             item = self.lesson_list.item(i)
             if item.checkState() == Qt.Checked:
-                selected.append(item.data(Qt.UserRole))
+                ders_data = item.data(Qt.UserRole).copy()  # Kopyasını al
+                # İstisna süreyi dersin verisine ekle
+                ders_data['istisna_sure'] = self.lesson_exceptions.get(ders_data['ders_id'])
+                selected.append(ders_data)
 
         if not selected:
             raise ValueError("Programa dahil edilecek en az bir ders seçmelisiniz.")
+
+        # Döküman kuralı: Aynı sınıfları bir arada tutmak için sırala
+        selected.sort(key=lambda d: (d['sinif'], d['ders_kodu']))
 
         d_from = self.date_from.date().toPyDate()
         d_to = self.date_to.date().toPyDate()
@@ -554,9 +636,11 @@ class ExamScheduler(QWidget):
     def _on_generate_clicked(self):
         try:
             constraints = self._collect_constraints()
-            schedule = self._generate_schedule(constraints)
-            self.assign_exam_rooms()      # <-- DOĞRU SIRA (Önce derslikleri ata)
-            self._update_preview(schedule) # <-- DOĞRU SIRA (Sonra ekranı güncelle)
+
+            schedule = self._perform_scheduling(constraints)
+
+            self.assign_exam_rooms()
+            self._update_preview(schedule)
 
             QMessageBox.information(
                 self,
@@ -568,27 +652,214 @@ class ExamScheduler(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Program oluşturulurken hata: {str(e)}")
 
-    def _generate_schedule(self, c):
+    def _add_time(self, current_time, minutes_to_add):
+        """ Bir datetime.time nesnesine dakika ekler, tarihi yok sayar. """
+        dummy_date = datetime(2000, 1, 1, current_time.hour, current_time.minute, current_time.second)
+        new_datetime = dummy_date + timedelta(minutes=minutes_to_add)
+        return new_datetime.time()
+
+    # --- YARDIMCI FONKSİYON 2 (DEĞİŞİKLİK YOK, AMA GEREKLİ) ---
+    def _check_student_conflict(self, ders_ogrencileri, sinav_tarihi, sinav_baslangic, sinav_bitis,
+                                ogrenci_programi):
+        """ Verilen dersin öğrencilerinin, o zaman aralığında başka bir sınavı var mı? """
+
+        for ogrenci_id in ders_ogrencileri:
+            for kayitli_tarih, kayitli_baslangic, kayitli_bitis in ogrenci_programi[ogrenci_id]:
+
+                if sinav_tarihi != kayitli_tarih:
+                    continue  # Farklı gün, çakışma olamaz
+
+                # Zaman aralığı çakışma kontrolü
+                # (StartA < EndB) and (EndA > StartB)
+                if (sinav_baslangic < kayitli_bitis) and (sinav_bitis > kayitli_baslangic):
+                    return True  # Çakışma var!
+
+        return False  # Çakışma yok
+
+    # --- YARDIMCI FONKSİYON 3 (DEĞİŞİKLİK YOK, AMA GEREKLİ) ---
+    def _update_student_schedule(self, ders_ogrencileri, sinav_tarihi, sinav_baslangic, sinav_bitis_with_break,
+                                 ogrenci_programi):
+        """ Öğrencilerin programına bu sınavı (ve bekleme süresini) ekler. """
+
+        kayit = (sinav_tarihi, sinav_baslangic, sinav_bitis_with_break)
+        for ogrenci_id in ders_ogrencileri:
+            ogrenci_programi[ogrenci_id].append(kayit)
+
+        # --- GÜNCELLENMİŞ ÇEKİRDEK FONKSİYON ---
+        # Not: _add_time, _check_student_conflict, ve _update_student_schedule
+        #      yardımcı fonksiyonlarının class'ınızda tanımlı olduğunu varsayıyorum.
+
+    def _perform_scheduling(self, c):
         conn = Database.get_connection()
         cur = conn.cursor()
 
+        # 1. Eski sınav kayıtlarını temizle
         cur.execute("""
             DELETE FROM Sinavlar 
             WHERE bolum_id = %s AND sinav_turu = %s
         """, (c["bolum_id"], c["sinav_turu"]))
 
-        slots = self._build_time_slots(c)
+        # 2. Gerekli verileri hazırla
+
+        ders_ogrenci_map = defaultdict(set)
+        ders_idler = [d['ders_id'] for d in c['secili_dersler']]
+        if ders_idler:
+            placeholders = ','.join(['%s'] * len(ders_idler))
+            cur.execute(f"""
+                SELECT ders_id, ogrenci_id 
+                FROM ogrencidersleri 
+                WHERE ders_id IN ({placeholders})
+            """, tuple(ders_idler))
+            for row in cur.fetchall():
+                # Ders ID ve Öğrenci ID'nin int olduğundan emin ol
+                ders_ogrenci_map[int(row[0])].add(int(row[1]))
+
+        # 3. Zamanlama için veri yapılarını kur
+
+        ogrenci_programi = defaultdict(list)
+        gun_timeline = {}
+
+        current_date = c["baslangic_tarihi"]
+        SINAV_BASLANGIC_SAATI = time(9, 0)
+        SINAV_BITIS_SAATI = time(17, 0)
+
+        while current_date <= c["bitis_tarihi"]:
+            if current_date.weekday() in c["allowed_weekdays"]:
+                gun_timeline[current_date] = SINAV_BASLANGIC_SAATI
+            current_date += timedelta(days=1)
+
+        if not gun_timeline:
+            raise ValueError("Seçilen tarih aralığında sınav yapılabilecek gün bulunamadı.")
+
+        gun_sinif_sayisi = defaultdict(lambda: defaultdict(int))
+        slot_programi = defaultdict(list)
         schedule = []
 
-        if c["ayni_anda_sinav_engelle"]:
-            for i, ders in enumerate(c["secili_dersler"]):
-                if i >= len(slots):
-                    break
-                tarih, saat_obj = slots[i]
-                schedule.append((ders, tarih, saat_obj))
-        else:
-            schedule = self._greedy_schedule(c, slots)
+        # 4. Dersleri Planlama Döngüsü
+        for ders in c["secili_dersler"]:
+            ders_suresi = ders['istisna_sure'] or c['varsayilan_sure']
+            ders_ogrencileri = ders_ogrenci_map.get(ders['ders_id'], set())
+            placed = False
 
+            sorted_gunler = sorted(
+                gun_timeline.keys(),
+                key=lambda tarih: gun_sinif_sayisi[tarih][ders['sinif']]
+            )
+
+            for tarih in sorted_gunler:
+
+                # --- A. ADIM: MEVCUT SLOTLARA YERLEŞMEYİ DENE (GREEDY) ---
+                if not c["ayni_anda_sinav_engelle"]:
+                    gunun_slotlari = [
+                        (saat, dersler) for (t, saat), dersler in slot_programi.items() if t == tarih
+                    ]
+
+                    for saat, slot_dersleri in gunun_slotlari:
+                        en_uzun_sure = max(
+                            (d['istisna_sure'] or c['varsayilan_sure']) for d in slot_dersleri
+                        )
+                        if ders_suresi > en_uzun_sure:
+                            continue
+
+                        bitis_saati = self._add_time(saat, en_uzun_sure)
+                        bitis_saati_ara_dahil = self._add_time(bitis_saati, c['varsayilan_bekleme'])
+
+                        conflict = self._check_student_conflict(
+                            ders_ogrencileri, tarih, saat, bitis_saati_ara_dahil, ogrenci_programi
+                        )
+
+                        if not conflict:
+                            schedule.append((ders, tarih, saat))
+                            slot_programi[(tarih, saat)].append(ders)
+                            self._update_student_schedule(
+                                ders_ogrencileri, tarih, saat, bitis_saati_ara_dahil, ogrenci_programi
+                            )
+                            gun_sinif_sayisi[tarih][ders['sinif']] += 1
+                            placed = True
+                            break  # Slot arama (iç) döngüsünden çık
+
+                if placed:
+                    break  # Gün arama (dış) döngüsünden de çık
+
+                # --- B. ADIM: YENİ SLOT OLUŞTUR (GÜNÜN SONUNA EKLE) ---
+
+                # 'Günde 1 Sınav' kuralı kontrolü
+                if gun_sinif_sayisi[tarih][ders['sinif']] > 0:
+                    continue  # Bu güne bu sınıftan zaten 1 sınav atandı, başka güne bak
+
+                baslangic_saati = gun_timeline[tarih]
+
+                bitis_saati = self._add_time(baslangic_saati, ders_suresi)
+                bitis_saati_ara_dahil = self._add_time(bitis_saati, c['varsayilan_bekleme'])
+
+                if bitis_saati > SINAV_BITIS_SAATI:
+                    continue
+
+                conflict = self._check_student_conflict(
+                    ders_ogrencileri, tarih, baslangic_saati, bitis_saati_ara_dahil, ogrenci_programi
+                )
+
+                if not conflict:
+                    schedule.append((ders, tarih, baslangic_saati))
+                    slot_programi[(tarih, baslangic_saati)].append(ders)
+                    self._update_student_schedule(
+                        ders_ogrencileri, tarih, baslangic_saati, bitis_saati_ara_dahil, ogrenci_programi
+                    )
+                    gun_timeline[tarih] = bitis_saati_ara_dahil
+                    gun_sinif_sayisi[tarih][ders['sinif']] += 1
+                    placed = True
+                    break  # Gün arama (dış) döngüsünden çık
+
+            # *** BAŞARISIZLIK DURUMU KONTROLÜ (GENEL HALE GETİRİLDİ) ***
+            if not placed:
+                cur.close()
+                conn.close()
+
+                # Başarısız olan dersin bilgilerini al
+                failing_sinif = ders['sinif']
+                failing_ders_adi = ders['ders_adi']
+                gun_sayisi = len(gun_timeline)
+
+                # Başarısız olan dersin sınıfına ait planlanacak toplam ders sayısını bul
+                failing_sinif_ders_sayisi = sum(1 for d in c['secili_dersler'] if d['sinif'] == failing_sinif)
+
+                # Bu sınıftaki tüm öğrencilerin tüm dersleri alıp almadığını kontrol et
+                # (Bu, 1. Sınıf senaryosu gibi özel durumlar için)
+                is_full_overlap = True  # Varsayılan olarak tam çakışma varsay
+                ogrenciler_bu_sinifta = set()
+
+                for d in c['secili_dersler']:
+                    if d['sinif'] == failing_sinif:
+                        ogrenciler_bu_sinifta.update(ders_ogrenci_map.get(d['ders_id'], set()))
+
+                if ogrenciler_bu_sinifta:
+                    for d in c['secili_dersler']:
+                        if d['sinif'] == failing_sinif:
+                            # Eğer bu sınıftaki öğrencilerin tamamı bu dersi almıyorsa,
+                            # tam çakışma yoktur.
+                            if not ogrenciler_bu_sinifta.issubset(ders_ogrenci_map.get(d['ders_id'], set())):
+                                is_full_overlap = False
+                                # break # Not: Bu kontrol %100 doğru olmayabilir ama iyi bir tahmin
+
+                # Eğer "günde 1 sınav" kuralı yüzünden sığmıyorsa:
+                if (failing_sinif_ders_sayisi > gun_sayisi) and is_full_overlap:
+                    raise ValueError(
+                        f"GÜN YETERSİZ! '{failing_ders_adi}' dersi atanamadı.\n\n"
+                        f"Sebep: {failing_sinif}. sınıf için {failing_sinif_ders_sayisi} adet çakışan sınav planlanıyor "
+                        f"ancak 'günde bir sınav' kuralı için sadece {gun_sayisi} gün mevcut.\n\n"
+                        "Lütfen tarih aralığını genişletin."
+                    )
+                else:
+                    # Diğer tüm çakışmalar (alttan ders, vb.) veya zaman darlığı için
+                    raise ValueError(
+                        f"'{failing_ders_adi}' dersi için uygun zaman bulunamadı! \n\n"
+                        f"Sebep: Tarih aralığı, {failing_sinif}. sınıfın diğer dersleri ve "
+                        "diğer sınıflarla olan öğrenci çakışmalarını (örn. alttan ders alma) "
+                        "karşılamak için yetersiz.\n\n"
+                        "Lütfen tarih aralığını genişletin."
+                    )
+
+        # 5. Planlanan sınavları veritabanına yaz
         for ders, tarih, saat_obj in schedule:
             cur.execute("""
                 INSERT INTO Sinavlar 
@@ -600,71 +871,6 @@ class ExamScheduler(QWidget):
         conn.commit()
         cur.close()
         conn.close()
-
-        return schedule
-
-    def _build_time_slots(self, c):
-        slots = []
-        current_date = c["baslangic_tarihi"]
-        base_time = time(9, 0)
-
-        while current_date <= c["bitis_tarihi"]:
-            if current_date.weekday() in c["allowed_weekdays"]:
-                current_time = datetime.combine(current_date, base_time)
-
-                while current_time.hour < 17:
-                    slots.append((current_date, current_time.time()))
-
-                    minutes_to_add = c["varsayilan_sure"] + c["varsayilan_bekleme"]
-                    current_time += timedelta(minutes=minutes_to_add)
-
-            current_date += timedelta(days=1)
-
-        return slots
-
-    def _greedy_schedule(self, c, slots):
-        schedule = []
-        ders_ogrenci = {}
-
-        conn = Database.get_connection()
-        cur = conn.cursor()
-
-        for ders in c["secili_dersler"]:
-            cur.execute("""
-                SELECT ogrenci_id 
-                FROM ogrencidersleri 
-                WHERE ders_id = %s
-            """, (ders["ders_id"],))
-            ders_ogrenci[ders["ders_id"]] = {row[0] for row in cur.fetchall()}
-
-        cur.close()
-        conn.close()
-
-        slot_idx = 0
-        for ders in c["secili_dersler"]:
-            placed = False
-
-            for i in range(slot_idx, len(slots)):
-                tarih, saat_obj = slots[i]
-                conflict = False
-
-                for scheduled_ders, s_tarih, s_saat in schedule:
-                    if s_tarih == tarih and s_saat == saat_obj:
-                        ders_ogrenci_ids = ders_ogrenci.get(ders["ders_id"], set())
-                        scheduled_ogrenci_ids = ders_ogrenci.get(scheduled_ders["ders_id"], set())
-
-                        if ders_ogrenci_ids & scheduled_ogrenci_ids:
-                            conflict = True
-                            break
-
-                if not conflict:
-                    schedule.append((ders, tarih, saat_obj))
-                    slot_idx = i
-                    placed = True
-                    break
-
-            if not placed and slots:
-                schedule.append((ders, slots[-1][0], slots[-1][1]))
 
         return schedule
 
@@ -843,16 +1049,26 @@ class ExamScheduler(QWidget):
                 SELECT s.sinav_id, s.ders_id, s.sinav_tarihi, s.sinav_saati, d.ders_adi
                 FROM Sinavlar s
                 JOIN Dersler d ON s.ders_id = d.ders_id
-                WHERE s.bolum_id = %s AND s.durum = 'Planlandı' AND s.sinav_turu = %s
+                WHERE s.bolum_id = %s AND s.sinav_turu = %s
                 ORDER BY s.sinav_tarihi, s.sinav_saati
             """, (self.user["bolum_id"], sinav_turu))
             sinavlar = cur.fetchall()
 
             if not sinavlar:
-                QMessageBox.warning(self, "Uyarı", "Henüz sınav bulunamadı!")
+                # Bu artık bir hata değil, program daha oluşmamış olabilir
+                # QMessageBox.warning(self, "Uyarı", "Henüz sınav bulunamadı!")
                 cur.close()
                 conn.close()
                 return
+
+            # --- YENİ: Önceki derslik atamalarını temizle ---
+            sinav_idler = [s[0] for s in sinavlar]
+            if sinav_idler:
+                cur.execute(f"""
+                    DELETE FROM SinavDerslikleri 
+                    WHERE sinav_id IN ({','.join(['%s'] * len(sinav_idler))})
+                """, tuple(sinav_idler))
+            # --- BİTTİ ---
 
             cur.execute("""
                 SELECT ders_id, COUNT(ogrenci_id) as ogrenci_sayisi
@@ -861,22 +1077,16 @@ class ExamScheduler(QWidget):
             """)
             ogrenci_sayilari = {r[0]: r[1] for r in cur.fetchall()}
 
-            derslik_programi = {d[0]: {} for d in derslikler}
-            son_kullanilan_derslikler = {}
+            # derslik_programi: derslik_id -> {tarih -> [saat, ...]}
+            derslik_programi = defaultdict(lambda: defaultdict(list))
 
             toplam_atama = 0
             uyari_listesi = []
 
             for sinav_id, ders_id, tarih, saat, ders_adi in sinavlar:
-                if isinstance(saat, str):
-                    saat_time = datetime.strptime(saat, "%H:%M").time()
-                else:
-                    saat_time = saat
-
-                if isinstance(tarih, datetime):
-                    tarih_date = tarih.date()
-                else:
-                    tarih_date = tarih
+                # Tip dönüşümlerini garantile (veritabanından farklı gelebilir)
+                saat_time = saat if isinstance(saat, time) else datetime.strptime(str(saat), "%H:%M:%S").time()
+                tarih_date = tarih if isinstance(tarih, type(date.today())) else tarih.date()
 
                 ogrenci_sayisi = ogrenci_sayilari.get(ders_id, 0)
 
@@ -884,15 +1094,12 @@ class ExamScheduler(QWidget):
                     uyari_listesi.append(f"⚠️ {ders_adi}: Öğrenci bulunamadı, atlanıyor.")
                     continue
 
-                onceki_slot_derslikler = son_kullanilan_derslikler.get((tarih_date, saat_time), set())
-
                 gereken_derslikler = self._select_optimal_classrooms(
                     derslikler=derslikler,
                     ogrenci_sayisi=ogrenci_sayisi,
                     tarih_date=tarih_date,
                     saat_time=saat_time,
                     derslik_programi=derslik_programi,
-                    onceki_slot_derslikler=onceki_slot_derslikler
                 )
 
                 if not gereken_derslikler:
@@ -906,9 +1113,8 @@ class ExamScheduler(QWidget):
                 toplam_atanan_kapasite = 0
 
                 for derslik_id, derslik_adi, kapasite in gereken_derslikler:
-                    derslik_programi.setdefault(derslik_id, {}).setdefault(tarih_date, []).append(saat_time)
-
-                    son_kullanilan_derslikler.setdefault((tarih_date, saat_time), set()).add(derslik_id)
+                    # Bu dersliği bu (tarih, saat) için meşgul olarak işaretle
+                    derslik_programi[derslik_id][tarih_date].append(saat_time)
 
                     cur.execute("""
                         INSERT INTO SinavDerslikleri (sinav_id, derslik_id)
@@ -925,8 +1131,12 @@ class ExamScheduler(QWidget):
                 if toplam_atanan_kapasite < ogrenci_sayisi:
                     uyari_listesi.append(
                         f"⚠️ {ders_adi}: {ogrenci_sayisi} öğrenci, "
-                        f"atanan kapasite: {toplam_atanan_kapasite} → {derslik_str}"
+                        f"atanan kapasite: {toplam_atanan_kapasite} → {derslik_str} (KAPASİTE YETERSİZ!)"
                     )
+                else:
+                    # Başarılı atama (çok kalabalık yapmaması için loglama kapatılabilir)
+                    # uyari_listesi.append(f"✅ {ders_adi} ({ogrenci_sayisi} ögr) → {derslik_str}")
+                    pass
 
             conn.commit()
             cur.close()
@@ -935,41 +1145,48 @@ class ExamScheduler(QWidget):
             mesaj = f"Toplam {toplam_atama} derslik ataması yapıldı."
 
             if uyari_listesi:
-                mesaj += f"\n\n⚠️ {len(uyari_listesi)} uyarı:\n" + "\n".join(uyari_listesi[:5])
-                if len(uyari_listesi) > 5:
-                    mesaj += f"\n... ve {len(uyari_listesi) - 5} uyarı daha"
+                # Sadece ❌ ve ⚠️ içeren uyarıları göster
+                onemli_uyarilar = [u for u in uyari_listesi if "❌" in u or "⚠️" in u]
+                if onemli_uyarilar:
+                    mesaj += f"\n\n⚠️ {len(onemli_uyarilar)} ÖNEMLİ UYARI:\n" + "\n".join(onemli_uyarilar[:10])
+                    if len(onemli_uyarilar) > 10:
+                        mesaj += f"\n... ve {len(onemli_uyarilar) - 10} uyarı daha"
 
-            QMessageBox.information(self, "Derslik Atama Tamamlandı", mesaj)
+            # Çok fazla uyarı penceresi çıkmaması için bu kapatılabilir
+            # QMessageBox.information(self, "Derslik Atama Tamamlandı", mesaj)
 
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Derslik atama hatası: {str(e)}")
 
     def _select_optimal_classrooms(self, derslikler, ogrenci_sayisi, tarih_date,
-                                   saat_time, derslik_programi, onceki_slot_derslikler):
+                                   saat_time, derslik_programi):
+
+        # O tarih ve saatte boş olan derslikleri bul
         uygun_derslikler = []
         for derslik_id, derslik_adi, kapasite in derslikler:
-            gunluk_program = derslik_programi.get(derslik_id, {}).get(tarih_date, [])
+            gunluk_program = derslik_programi[derslik_id].get(tarih_date, [])
 
             if saat_time in gunluk_program:
-                continue
-
-            if derslik_id in onceki_slot_derslikler:
-                continue
+                continue  # Bu derslik bu saatte dolu
 
             uygun_derslikler.append((derslik_id, derslik_adi, kapasite))
 
         if not uygun_derslikler:
             return []
 
+        # Döküman kuralı: "Derslik kullanımı en aza indirgeyecek şekilde yerleştirme"
+        # Bu, öğrenci sayısını karşılayana kadar en büyük derslikleri seçerek sağlanır.
+
         secilen_derslikler = []
         kalan_ogrenci = ogrenci_sayisi
 
+        # Uygun derslikler zaten kapasiteye göre (büyükten küçüğe) sıralı
         for derslik in uygun_derslikler:
             derslik_id, derslik_adi, kapasite = derslik
             secilen_derslikler.append(derslik)
             kalan_ogrenci -= kapasite
 
             if kalan_ogrenci <= 0:
-                break
+                break  # Yeterli kapasiteye ulaşıldı
 
         return secilen_derslikler
